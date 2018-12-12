@@ -28,7 +28,7 @@ class PBAKER_PT_panel(Panel):
         layout = self.layout
         col = layout.column()
 
-        col.operator('object.pbaker_bake', text='Bake', icon='RENDER_STILL')
+        col.operator('object.principled_baker_bake', text='Bake', icon='RENDER_STILL')
 
         col.prop(settings, "resolution")
         col.prop(settings, "margin")

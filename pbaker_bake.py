@@ -47,7 +47,7 @@ NODE_OFFSET_Y = -260
 class PBAKER_OT_bake(Operator):
     bl_idname = "object.principled_baker_bake"
     bl_label = "Bake"
-    bl_description = "The Cake is a Lie" 
+    bl_description = "bake all inputs of a Principled BSDF to image textures" 
     bl_options = {'REGISTER', 'UNDO'} 
 
     settings = None
