@@ -1,5 +1,5 @@
 #    Principled Baker
-#    Copyright (C) 2018 Daniel Engler
+#    Copyright (C) 2019 Daniel Engler
 
 #    This program is free software: you can redistribute it and/or modify
 #    it under the terms of the GNU General Public License as published by
@@ -18,7 +18,7 @@ bl_info = {
     "name": "Principled Baker",
     "description": "bakes all inputs of Principled BSDF to image textures",
     "author": "Daniel Engler",
-    "version": (0, 1, 4),
+    "version": (0, 1, 5),
     "blender": (2, 80, 0),
     "location": "Node Editor Toolbar",
     "category": "Node",
@@ -26,8 +26,8 @@ bl_info = {
 
 import bpy
 
-from bpy.props import PointerProperty
-from bpy.types import Panel
+# from bpy.props import PointerProperty
+# from bpy.types import Panel
 
 from . pbaker_settings import PBAKER_settings
 from . pbaker_panel import PBAKER_PT_panel
@@ -37,7 +37,7 @@ def register():
    bpy.utils.register_class(PBAKER_settings)
    bpy.utils.register_class(PBAKER_OT_bake)
    bpy.utils.register_class(PBAKER_PT_panel)
-   bpy.types.Scene.principled_baker_settings = PointerProperty(type=PBAKER_settings)
+   bpy.types.Scene.principled_baker_settings = bpy.props.PointerProperty(type=PBAKER_settings)
     
 def unregister():
    bpy.utils.unregister_class(PBAKER_PT_panel)

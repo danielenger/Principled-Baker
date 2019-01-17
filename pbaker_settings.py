@@ -1,5 +1,4 @@
 import bpy
-from bpy.types import Panel
 
 from bpy.props import (StringProperty,
                        BoolProperty,
@@ -10,23 +9,40 @@ from bpy.props import (StringProperty,
                        PointerProperty,
                        )
 
-from bpy.types import (Panel,
-                       Operator,
-                       PropertyGroup,
-                       )
-
 
 class PBAKER_settings(bpy.types.PropertyGroup):
 
-    resolution : IntProperty(
-        name="resolution",
-        default=2048,
-        min=1,
-        max = 16*1024
+    use_autodetect : BoolProperty(
+        name="Autodetect",
+        description="Bake only linked inputs and inputs with values that differ in different Shader nodes",
+        default=True
     )
-    
+
+    image_suffix_settings_show : BoolProperty(
+        name="Suffix Settings",
+        default=True
+    )
+
+    custom_resolution : IntProperty(
+        name="Resolution",
+        default=1024,
+        min=1,
+        soft_max = 8*1024
+    )
+    resolution : EnumProperty(
+        name="Resolution",
+        items=(
+            ('custom', 'Custom', ''),
+            ('512', '512', '512'),
+            ('1024', '1024', '1024'),
+            ('2048', '2048', '2048'),
+            ('4096', '4096', '4096'),
+        ),
+        default='1024'
+    )
+
     margin : IntProperty(
-        name="margin",
+        name="Margin",
         default=0,
         min=0,
         max=64
@@ -34,7 +50,7 @@ class PBAKER_settings(bpy.types.PropertyGroup):
 
     use_overwrite : BoolProperty(
         name="Overwrite",
-        default=True
+        default=False
     )
 
     use_alpha : BoolProperty(
@@ -61,36 +77,50 @@ class PBAKER_settings(bpy.types.PropertyGroup):
         default="_roughness",
         maxlen=1024,
     )
+    
+    suffix_specular : StringProperty(
+        name="Specular ",
+        default="_specular",
+        description="invert Roughness for Specular workflow\nDo not confuse with 'Specular' input of Principled BSDF!",
+        maxlen=1024,
+    )
+    use_invert_roughness : BoolProperty(
+        name="invert Roughness",
+        description="invert Roughness for Specular workflow\nDo not confuse with 'Specular' input of Principled BSDF!",
+        default=False
+    )
+
     suffix_normal : StringProperty(
         name="Normal",
         default="_normal",
         maxlen=1024,
     )
     suffix_bump : StringProperty(
-        name="Bump",
+        name="Bump (Height)",
         default="_bump",
         maxlen=1024,
     )
     suffix_displacement : StringProperty(
         name="Displacement",
-        default="_disp",
-        maxlen=1024,
-    )
-    suffix_bump_to_normal : StringProperty(
-        name="Bump to Normal",
-        default="_normal2",
+        default="_displacement",
         maxlen=1024,
     )
 
     image_prefix : StringProperty(
-        name="Texture Name Prefix",
-        default="",
+        name="Prefix (Texture Name)",
+        description="Object name will be used as prefix, if Prefix not set",
         maxlen=1024,
+    )
+
+    use_object_name : BoolProperty(
+        name="Object Name as (second) Prefix",
+        description="Use object name as prefix.\nObject name will be used as prefix, if Texture Name Prefix not set",
+        default=False
     )
 
     file_path : StringProperty(
         name="",
-        description="Choose a directory:",
+        description="directory for textures output",
         default="//",
         maxlen=1024,
         subtype='DIR_PATH'
@@ -107,7 +137,8 @@ class PBAKER_settings(bpy.types.PropertyGroup):
     )
 
     use_new_material : BoolProperty(
-        name="New Material",
+        name="Add New Material",
+        description="Add new material to selected objects with a Principled BSDF.\nIf Selected to Active is active, a new material will be added to active object",
         default=False
     )
 
@@ -118,66 +149,69 @@ class PBAKER_settings(bpy.types.PropertyGroup):
         maxlen=1024,
     )
 
-    use_bump_to_normal : BoolProperty(
-        name="Bump as Normal Map",
-        description="bake bump map as normal map",
+    use_bake_bump : BoolProperty(
+        name="Bake Bump (Height)",
+        description="Bake Bump Map from Bump node Height input",
         default=False
     )
-
-    use_bump_strength : BoolProperty(
-        name="use Bump Strength",
-        default=False
-    )
-
-    use_normal_strength : BoolProperty(
-        name="use Normal Map Strength",
-        default=False
-    )
-
     use_alpha_to_color : BoolProperty(
-        name="alpha channel to color",
+        name="Alpha channel to Color",
+        description="Add alpha channel to Color Texture",
+        default=False
+    )
+    use_exclude_transparent_colors : BoolProperty(
+        name="Exclude Transparent Colors",
+        description="Exclude colors from nodes with transparency from Color Texture",
         default=True
     )
 
     file_format : EnumProperty(
         name="File Format",
         items=(
-            ("PNG", "PNG", ""),
-            ("BMP", "BMP", ""),
-            ("JPEG", "JPEG", ""),
-            ("TIFF", "TIFF", ""),
-            ("TARGA", "TARGA", ""),
+            ('PNG', 'PNG', ''),
+            ('BMP', 'BMP', ''),
+            ('JPEG', 'JPEG', ''),
+            ('TIFF', 'TIFF', ''),
+            ('TARGA', 'TARGA', ''),
         ),
         default='PNG'
     )
 
-    use_autodetect : BoolProperty(name='Autodetect',
-                                  description="Bake only linked inputs and inputs with values that differ in different Principled BSDF nodes",
-                                  default=False)
+    suffix_text_mod : EnumProperty(
+        name="Convert suffix",
+        items=(
+            ('custom', 'Custom', ''),
+            ('lower', 'Lower', 'Convert suffix to lowercase letters.'),
+            ('upper', 'Upper', 'Convert suffix to capital letters.'),
+            ('title', 'Title', 'Convert suffix. First letter capital. Rest lowercase letters.'),
+        ),
+        default='custom'
+    )
 
-    use_Alpha : BoolProperty(name='Alpha/Transparency', default=False)
+    use_Alpha : BoolProperty(name="Alpha/Transparency", default=False)
+    use_Emission : BoolProperty(name="Emission", default=False)
 
-    use_Base_Color : BoolProperty(name='Color', default=True)
-    use_Metallic : BoolProperty(name='Metallic', default=True)
-    use_Roughness : BoolProperty(name='Roughness', default=True)
-    use_Specular : BoolProperty(name='Specular', default=False)
+    use_Base_Color : BoolProperty(name="Color", default=True)
+    use_Metallic : BoolProperty(name="Metallic", default=True)
+    use_Roughness : BoolProperty(name="Roughness", default=True)
 
-    use_Normal : BoolProperty(name='Normal', default=True)
-    use_Bump : BoolProperty(name='Bump', default=False)
-    use_Displacement : BoolProperty(name='Displacement', default=False)
+    use_Normal : BoolProperty(name="Normal", default=True)
+    use_Bump : BoolProperty(name="Bump (Height)", default=False)
+    use_Displacement : BoolProperty(name="Displacement", default=False)
 
-    use_Anisotropic : BoolProperty(name='Anisotropic', default=False)
-    use_Anisotropic_Rotation : BoolProperty(name='Anisotropic Rotation', default=False)
-    use_Clearcoat : BoolProperty(name='Clearcoat', default=False)
-    use_Clearcoat_Normal : BoolProperty(name='Clearcoat Normal', default=False)
-    use_Clearcoat_Roughness : BoolProperty(name='Clearcoat Roughness', default=False)
-    use_IOR : BoolProperty(name='IOR', default=False)
-    use_Sheen : BoolProperty(name='Sheen', default=False)
-    use_Sheen_Tint : BoolProperty(name='Sheen Tint', default=False)
-    use_Specular_Tint : BoolProperty(name='Specular Tint', default=False)
-    use_Subsurface : BoolProperty(name='Subsurface', default=False)
-    use_Subsurface_Color : BoolProperty(name='Subsurface Color', default=False)
-    use_Subsurface_Radius : BoolProperty(name='Subsurface Radius', default=False)
-    use_Tangent : BoolProperty(name='Tangent', default=False)
-    use_Transmission : BoolProperty(name='Transmission', default=False)
-    use_Transmission_Roughness : BoolProperty(name='Transmission Roughness', default = False)
+    use_Anisotropic : BoolProperty(name="Anisotropic", default=False)
+    use_Anisotropic_Rotation : BoolProperty(name="Anisotropic Rotation", default=False)
+    use_Clearcoat : BoolProperty(name="Clearcoat", default=False)
+    use_Clearcoat_Normal : BoolProperty(name="Clearcoat Normal", default=False)
+    use_Clearcoat_Roughness : BoolProperty(name="Clearcoat Roughness", default=False)
+    use_IOR : BoolProperty(name="IOR", default=False)
+    use_Sheen : BoolProperty(name="Sheen", default=False)
+    use_Sheen_Tint : BoolProperty(name="Sheen Tint", default=False)
+    use_Specular : BoolProperty(name="Specular", default=False)
+    use_Specular_Tint : BoolProperty(name="Specular Tint", default=False)
+    use_Subsurface : BoolProperty(name="Subsurface", default=False)
+    use_Subsurface_Color : BoolProperty(name="Subsurface Color", default=False)
+    use_Subsurface_Radius : BoolProperty(name="Subsurface Radius", default=False)
+    use_Tangent : BoolProperty(name="Tangent", default=False)
+    use_Transmission : BoolProperty(name="Transmission", default=False)
+    use_Transmission_Roughness : BoolProperty(name="Transmission Roughness", default = False)
