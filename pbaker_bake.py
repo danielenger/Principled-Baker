@@ -161,6 +161,41 @@ class PBAKER_OT_bake(bpy.types.Operator):
             suffix = suffix.title()
         return suffix
 
+    def delete_tagged_nodes(self, obj, tag):
+        for mat_slot in obj.material_slots:
+            for node in mat_slot.material.node_tree.nodes:
+                if NODE_TAG in node.keys():
+                    mat_slot.material.node_tree.nodes.remove(node)
+
+
+    def guess_colors(self, obj, job_name):
+        for mat_slot in obj.material_slots:
+            mat = mat_slot.material
+            if not MATERIAL_TAG in mat.keys():
+                mat_out = find_active_output(mat_slot.material)
+                node_types = ALPHA_NODES[job_name]
+                color_list = self.get_value_list_from_node_types(mat_out, 'Color', node_types)
+                if len(color_list) >= 1:
+                    self.new_node_colors[job_name] = color_list[0]
+
+
+    def create_bake_image_node(self, mat, image):
+        bake_image_node = self.new_image_node(mat)
+        bake_image_node.color_space = 'COLOR' if image.colorspace_settings.name == 'sRGB' else 'NONE'
+        bake_image_node.image = image  # add image to node
+        bake_image_node[NODE_TAG] = 1  # tag for clean up
+        # make only bake_image_node active
+        bake_image_node.select = True
+        mat.node_tree.nodes.active = bake_image_node
+
+
+    def get_active_outputs(self, obj):
+        act_out = []
+        for mat_slot in obj.material_slots:
+            if not MATERIAL_TAG in mat_slot.material.keys():
+                act_out.append( find_active_output(mat_slot.material) )
+        return act_out
+
     def new_material(self, name):
         mat = bpy.data.materials.new(name)
         mat.use_nodes = True
@@ -310,85 +345,83 @@ class PBAKER_OT_bake(bpy.types.Operator):
         node[NODE_TAG] = 1
         return node
 
-    def get_file_path(self, image_file_name):
-        path = os.path.join(
-            os.path.dirname(bpy.data.filepath),  # absolute file path of current blend file
-            self.settings.file_path.lstrip("/"),  # relativ file path from user input
-            image_file_name)
-        return path
-
-    def new_image(self, image_file_name, alpha=False):
-        if self.settings.resolution == "custom":
-            res = self.settings.custom_resolution
+    def is_image_file(self, image_file_name):
+        if image_file_name.startswith("//"):
+            cwd = os.path.dirname(bpy.data.filepath)
+            abs_image_path = os.path.join( cwd, os.path.normpath(image_file_name.lstrip("/")) )
+            return os.path.isfile( abs_image_path )
         else:
-            res = int(self.settings.resolution)
-        image = bpy.data.images.new(name=image_file_name, width=res, height=res, alpha=alpha)
+            return os.path.isfile( image_file_name )
 
-        image.use_alpha = alpha  # self.settings.use_alpha
-        image.alpha_mode = 'STRAIGHT'
+    def get_image_file_name(self, object_name, job_name):
+        prefix = self.settings.image_prefix
+        if prefix == "" or len(self.selected_objects) > 1 or self.settings.use_object_name:
+            prefix = self.settings.image_prefix + object_name
+        image_file_format = IMAGE_FILE_ENDINGS[self.settings.file_format]
+        image_file_name = "{0}{1}.{2}".format(prefix, self.get_suffix(job_name), image_file_format)
+        return image_file_name
 
-        if alpha:
-            fill_image(image, (0.0, 0.0, 0.0, 0.0))
+    def exists_new_bake_image_file(self, object_name, job_name):
+        image_file_name = self.get_image_file_name(object_name, job_name)
+        cwd = os.path.dirname(bpy.data.filepath)
+        abs_image_path = os.path.join( cwd, os.path.normpath(self.settings.file_path.lstrip("/").rstrip("\\")), image_file_name )
+        return os.path.isfile( abs_image_path )
 
-        image.filepath_raw = self.get_file_path(image_file_name)
-        image.file_format = self.settings.file_format
-        image.save()
-        return image
+    def get_image_file_path(self, image_file_name):
+        if self.settings.file_path.startswith("//"):
+            path = self.settings.file_path.rstrip("\\")
+            return os.path.join(path, image_file_name)
+        else:
+            return os.path.join(self.settings.file_path, image_file_name)
 
     def new_bake_image(self, object_name, job_name):
-        # image file data
         prefix = self.settings.image_prefix
         if prefix == "" or len(self.selected_objects) > 1 or self.settings.use_object_name:
             prefix = self.settings.image_prefix + object_name
         image_file_format = IMAGE_FILE_ENDINGS[self.settings.file_format]
         image_file_name = "{0}{1}.{2}".format(prefix, self.get_suffix(job_name), image_file_format)  # include ending
-        image_file_path = self.get_file_path(image_file_name)
-        image_is_file = os.path.isfile(image_file_path)
+        image_file_path = self.get_image_file_path(image_file_name)
 
-        colorspace = 'sRGB' if job_name == 'Color' else 'Non-Color'
-        
-        if job_name == 'Color' and self.settings.use_alpha_to_color:
-            alpha_channel = 0.0
-        elif self.settings.use_alpha:
-            alpha_channel = 0.0
-        else:
+        cwd = os.path.dirname(bpy.data.filepath)
+        abs_path = self.settings.file_path
+        if self.settings.file_path.startswith("//"):
+            abs_path = os.path.join(cwd, os.path.normpath(self.settings.file_path.lstrip("//").rstrip("\\")))
+        image_is_file = os.path.isfile( os.path.join(abs_path, image_file_name) )
+
+        if not image_is_file or self.settings.use_overwrite:
+            if not os.path.exists(abs_path):
+                os.makedirs(abs_path)
+            
+            if self.settings.resolution == "custom":
+                res = int(self.settings.custom_resolution)
+            else:
+                res = int(self.settings.resolution)
+
+            alpha = False
             alpha_channel = 1.0
+            if self.settings.use_alpha or (job_name == 'Color' and self.settings.use_alpha_to_color):
+                alpha_channel = 0.0
+                alpha = True
+            color = (0.5, 0.5, 1.0, alpha_channel) if self.get_bake_type(job_name) == 'NORMAL' else (0.0, 0.0, 0.0, alpha_channel)
 
-        image_alpha = True if alpha_channel == 0.0 else False
-        color = (0.5, 0.5, 1.0, alpha_channel) if self.get_bake_type(job_name) == 'NORMAL' else (0.0, 0.0, 0.0, alpha_channel)
+            if alpha:
+                fill_image(image, (0.0, 0.0, 0.0, 0.0))
 
-        if self.settings.use_overwrite:
-            if image_file_name in bpy.data.images.keys():
-                if image_is_file:
-                    image = bpy.data.images[image_file_name]
+            image = bpy.data.images.new(name=image_file_name, width=res, height=res, alpha=alpha)
+            image.use_alpha = alpha
+            # image.filepath_raw = image_file_path
+            image.filepath = image_file_path
+            image.file_format = self.settings.file_format
+            image.alpha_mode = 'STRAIGHT'
+            image.colorspace_settings.name = 'sRGB' if job_name == 'Color' else 'Non-Color'
 
-                    image.use_alpha = self.settings.use_alpha
-
-                    # rescale
-                    if self.settings.resolution == "custom":
-                        res = self.settings.custom_resolution
-                    else:
-                        res = int(self.settings.resolution)
-                    if not image.size[0] == res:
-                        image.scale(res, res)
-                else:
-                    # new image
-                    image = self.new_image(image_file_name, image_alpha)
-                    image.colorspace_settings.name = colorspace
-
+            if self.settings.use_overwrite:
                 fill_image(image, color)
-            else:
-                # new image
-                image = self.new_image(image_file_name, image_alpha)
-                image.colorspace_settings.name = colorspace
-                fill_image(image, color)
+
+            image.save()
         else:
-            if not image_is_file:
-                # new image
-                image = self.new_image(image_file_name, image_alpha)
-                image.colorspace_settings.name = colorspace
-            else:
-                image = bpy.data.images.load(image_file_path, check_existing=False)
+            check_existing = not self.settings.use_overwrite
+            image = bpy.data.images.load(image_file_path, check_existing=check_existing)
         
         return image
 
@@ -504,6 +537,47 @@ class PBAKER_OT_bake(bpy.types.Operator):
                     if input_socket.is_linked:
                         from_socket = input_socket.links[0].from_socket
                         self.prepare_for_bake(mat, from_socket, new_socket, input_socket_name)
+
+    def prepare_object_for_bake(self, obj, job_name):        
+        bake_type = self.get_bake_type(job_name)
+        for mat_slot in obj.material_slots:
+            mat = mat_slot.material
+            if not MATERIAL_TAG in mat.keys():
+                # material_output = find_node_by_type(mat, 'OUTPUT_MATERIAL')
+                material_output = find_active_output(mat_slot.material)
+                socket_to_surface = material_output.inputs['Surface'].links[0].from_socket
+                
+                if bake_type == 'DIFFUSE':
+                    # new temp Material Output node
+                    pb_output_node = self.new_pb_output_node(mat)
+                    pb_output_node[NODE_TAG] = 1
+                    pb_output_node.is_active_output = True
+
+                    material_output.is_active_output = False
+
+                    # temp Diffuse node
+                    pb_diffuse_node_color = [1, 1, 1, 1]
+                    pb_diffuse_node = self.new_pb_diffuse_node(mat, pb_diffuse_node_color)
+
+                    socket_to_pb_diffuse_node_color = pb_diffuse_node.inputs['Color']
+                    
+                    if job_name in ALPHA_NODES.keys():
+                        node_type = ALPHA_NODES[job_name]
+                        self.prepare_for_bake_factor(mat, socket_to_surface, socket_to_pb_diffuse_node_color, node_type)
+
+                    elif job_name == 'Displacement':
+                        if material_output.inputs['Displacement'].is_linked:
+                            socket_to_displacement = material_output.inputs['Displacement'].links[0].from_socket
+                            self.prepare_for_bake(mat, socket_to_displacement, socket_to_pb_diffuse_node_color, 'Height')
+                    
+                    elif job_name == 'Bump':
+                        self.prepare_for_bake(mat, socket_to_surface, socket_to_pb_diffuse_node_color, 'Height')
+
+                    else:
+                        self.prepare_for_bake(mat, socket_to_surface, socket_to_pb_diffuse_node_color, job_name)
+
+                    # link pb_diffuse_node to material_output
+                    mat.node_tree.links.new(pb_diffuse_node.outputs[0], pb_output_node.inputs['Surface'])
 
     def is_socket_linked_in_node_tree(self, node, input_socket_name):
         if input_socket_name == 'Color':
@@ -662,7 +736,13 @@ class PBAKER_OT_bake(bpy.types.Operator):
         # object not mesh or has no material
         orig_selected_objects = []
         for obj in self.selected_objects:
-            if not obj.type == 'MESH' or len(obj.material_slots) == 0:
+            if obj.type == 'MESH':
+                if not self.render_settings.use_selected_to_active:
+                    if len(obj.material_slots) == 0:
+                        orig_selected_objects.append(obj)
+                        self.selected_objects.remove(obj)
+                        obj.select_set(False)            
+            else:
                 orig_selected_objects.append(obj)
                 self.selected_objects.remove(obj)
                 obj.select_set(False)
@@ -671,7 +751,6 @@ class PBAKER_OT_bake(bpy.types.Operator):
         for obj in self.selected_objects:
             for mat_slot in obj.material_slots:
                 if not MATERIAL_TAG in mat_slot.material.keys():
-                    # material_output = find_node_by_type(mat_slot.material, 'OUTPUT_MATERIAL')
                     material_output = find_active_output(mat_slot.material)
                     if material_output == None:
                         self.report({'ERROR'}, 'Material Output missing in "{0}"'.format(mat_slot.material.name))
@@ -693,11 +772,7 @@ class PBAKER_OT_bake(bpy.types.Operator):
                 new_images.clear()
                 
                 # find active material outpus for later clean up
-                active_outputs = []
-                for mat_slot in obj.material_slots:
-                    if not MATERIAL_TAG in mat_slot.material.keys():
-                        # material_output = find_node_by_type(mat_slot.material, 'OUTPUT_MATERIAL')
-                        active_outputs.append( find_active_output(mat_slot.material) )
+                active_outputs = self.get_active_outputs(obj)
 
                 # populate joblist auto                
                 if self.settings.use_autodetect:
@@ -713,88 +788,40 @@ class PBAKER_OT_bake(bpy.types.Operator):
                 # go through joblist
                 for job_name in joblist:
     
-                    # bake_type
-                    bake_type = self.get_bake_type(job_name)
-
-                    # image to bake on
-                    image = self.new_bake_image(obj.name, job_name)
-                    
-                    # append to image dict for new material
-                    new_images[job_name] = image
-
                     # guess colors for Transparent, Translucent, Glass, Emission
                     if self.settings.use_new_material:
                         if job_name in self.new_node_colors.keys():
-                            for mat_slot in obj.material_slots:
-                                mat = mat_slot.material
-                                if not MATERIAL_TAG in mat.keys():
-                                    # mat_out = find_node_by_type(mat, 'OUTPUT_MATERIAL')
-                                    mat_out = find_active_output(mat_slot.material)
-                                    node_types = ALPHA_NODES[job_name]
-                                    color_list = self.get_value_list_from_node_types(mat_out, 'Color', node_types)
-                                    if len(color_list) >= 1:
-                                        self.new_node_colors[job_name] = color_list[0]
+                            self.guess_colors(obj, job_name)
 
-                    if not self.settings.use_overwrite and os.path.isfile(image.file_path):
+                    if not self.settings.use_overwrite and self.exists_new_bake_image_file(obj.name, job_name):# os.path.isfile(image.filepath):
                         # do not bake!
-                        self.report({'INFO'}, "baking skipped for '{0}'. File exists.".format(image.name))
+                        self.report({'INFO'}, "baking skipped for '{0}'. File exists.".format(self.get_image_file_name(obj.name, job_name)))
+
+                        # load image for new material
+                        if self.settings.use_new_material:
+                            image = self.new_bake_image(obj.name, job_name)
+                            new_images[job_name] = image
+
                     else:  # do bake
 
+                        # image to bake on
+                        image = self.new_bake_image(obj.name, job_name)
+                        # append image to image dict for new material
+                        if self.settings.use_new_material:
+                            new_images[job_name] = image
+
                         # prepare materials before baking
+                        self.prepare_object_for_bake(obj, job_name)
+
+                        # create temp image nodes to bake on
                         for mat_slot in obj.material_slots:
                             mat = mat_slot.material
-                            if not MATERIAL_TAG in mat.keys():
-                                # material_output = find_node_by_type(mat, 'OUTPUT_MATERIAL')
-                                material_output = find_active_output(mat_slot.material)
-                                socket_to_surface = material_output.inputs['Surface'].links[0].from_socket
-                                
-                                if bake_type == 'DIFFUSE':
-                                    # new temp Material Output node
-                                    pb_output_node = self.new_pb_output_node(mat)
-                                    pb_output_node[NODE_TAG] = 1
-                                    pb_output_node.is_active_output = True
-
-                                    material_output.is_active_output = False
-
-                                    # temp Diffuse node
-                                    pb_diffuse_node_color = [1, 1, 1, 1]
-                                    pb_diffuse_node = self.new_pb_diffuse_node(mat, pb_diffuse_node_color)
-
-                                    socket_to_pb_diffuse_node_color = pb_diffuse_node.inputs['Color']
-                                    
-                                    if job_name in ALPHA_NODES.keys():
-                                        node_type = ALPHA_NODES[job_name]
-                                        self.prepare_for_bake_factor(mat, socket_to_surface, socket_to_pb_diffuse_node_color, node_type)
-
-                                    elif job_name == 'Displacement':
-                                        if material_output.inputs['Displacement'].is_linked:
-                                            socket_to_displacement = material_output.inputs['Displacement'].links[0].from_socket
-                                            self.prepare_for_bake(mat, socket_to_displacement, socket_to_pb_diffuse_node_color, 'Height')
-                                    
-                                    elif job_name == 'Bump':
-                                        self.prepare_for_bake(mat, socket_to_surface, socket_to_pb_diffuse_node_color, 'Height')
-
-                                    else:
-                                        self.prepare_for_bake(mat, socket_to_surface, socket_to_pb_diffuse_node_color, job_name)
-
-                                    # link pb_diffuse_node to material_output
-                                    mat.node_tree.links.new(pb_diffuse_node.outputs[0], pb_output_node.inputs['Surface'])
-
-                                    # material_output.is_active_output = True
-                        
-                                # create temp image node to bake on
-                                bake_image_node = self.new_image_node(mat)
-                                # bake_image_node.color_space = 'COLOR' if image.colorspace_settings.name == 'sRGB' else 'NONE'
-                                bake_image_node.color_space = 'COLOR' if job_name == 'Color' else 'NONE'
-                                bake_image_node.image = image  # add image to node
-                                bake_image_node[NODE_TAG] = 1  # tag for clean up
-                                # make only bake_image_node active
-                                bake_image_node.select = True
-                                mat.node_tree.nodes.active = bake_image_node
+                            if not MATERIAL_TAG in mat.keys():                                
+                                self.create_bake_image_node(mat, image)
 
                         # bake!
                         self.report({'INFO'}, "baking... '{0}'".format(image.name))
-                        # pass_filter = set(['COLOR']) if bake_type == 'DIFFUSE' else set()                        
+                        bake_type = self.get_bake_type(job_name)
                         if not bake_type == "NORMAL":
                             bake_type = "EMIT"
                         bpy.ops.object.bake(
@@ -802,16 +829,12 @@ class PBAKER_OT_bake(bpy.types.Operator):
                             margin=self.settings.margin,
                             use_clear=False,
                             use_selected_to_active=False)
-                            # pass_filter=pass_filter)
 
                         # save image!
                         image.save()
 
                         # clean up: delete all nodes with tag = NODE_TAG
-                        for mat_slot in obj.material_slots:
-                            for node in mat_slot.material.node_tree.nodes:
-                                if NODE_TAG in node.keys():
-                                    mat_slot.material.node_tree.nodes.remove(node)
+                        self.delete_tagged_nodes(obj, NODE_TAG)
                         if self.settings.use_new_material:
                             for node in new_mat.node_tree.nodes:
                                 if NODE_TAG in node.keys():
@@ -825,6 +848,7 @@ class PBAKER_OT_bake(bpy.types.Operator):
                         for mat_output in active_outputs:
                             mat_output.is_active_output = True
                         
+
                 # add alpha channel to color
                 if self.settings.use_alpha_to_color:
                     if 'Color' in new_images and "Alpha" in new_images:
@@ -843,16 +867,9 @@ class PBAKER_OT_bake(bpy.types.Operator):
         elif self.render_settings.use_selected_to_active:
             new_images.clear()
             
-            if self.active_object in self.selected_objects:
-                self.selected_objects.remove(self.active_object)
-
             # find active material outpus for later clean up
             for obj in self.selected_objects:
-                active_outputs = []
-                for mat_slot in obj.material_slots:
-                    if not MATERIAL_TAG in mat_slot.material.keys():
-                        # material_output = find_node_by_type(mat_slot.material, 'OUTPUT_MATERIAL')
-                        active_outputs.append( find_active_output(mat_slot.material) )
+                active_outputs = self.get_active_outputs(obj)
                         
             # populate joblist auto
             for obj in self.selected_objects:
@@ -873,84 +890,39 @@ class PBAKER_OT_bake(bpy.types.Operator):
                 # bake_type
                 bake_type = self.get_bake_type(job_name)                
 
-                # image to bake on
-                image = self.new_bake_image(obj.name, job_name)
-                
-                # append to image dict for new material
-                new_images[job_name] = image
-
                 # guess color for Transparent, Translucent, Glass, Emission
                 if job_name in self.new_node_colors.keys():
                     for obj in self.selected_objects:
-                        for mat_slot in obj.material_slots:
-                            mat = mat_slot.material
-                            if not MATERIAL_TAG in mat.keys():
-                                # mat_out = find_node_by_type(mat, 'OUTPUT_MATERIAL')
-                                mat_out = find_active_output(mat)
-                                node_types = ALPHA_NODES[job_name]
-                                color_list = self.get_value_list_from_node_types(mat_out, 'Color', node_types)
-                                if len(color_list) >= 1:
-                                    self.new_node_colors[job_name] = color_list[0]
+                        self.guess_colors(obj, job_name)
 
-                if not self.settings.use_overwrite and os.path.isfile(image.file_path):
+                if not self.settings.use_overwrite and self.exists_new_bake_image_file(obj.name, job_name):# os.path.isfile(image.filepath):
                     # do not bake!
-                    self.report({'INFO'}, "baking skipped for '{0}'. File exists.".format(image.name))
+                    self.report({'INFO'}, "baking skipped for '{0}'. File exists.".format(self.get_image_file_name(obj.name, job_name)))
+
+                    # load image for new material
+                    if self.settings.use_new_material:
+                        image = self.new_bake_image(obj.name, job_name)
+                        new_images[job_name] = image
+
                 else:  # do bake
+
+                    # image to bake on
+                    image = self.new_bake_image(obj.name, job_name)
+                    # append image to image dict for new material
+                    new_images[job_name] = image
+
                     # prepare materials before baking
                     for obj in self.selected_objects:
-                        for mat_slot in obj.material_slots:
-                            mat = mat_slot.material
-                            # material_output = find_node_by_type(mat, 'OUTPUT_MATERIAL')
-                            material_output = find_active_output(mat)
-                            socket_to_surface = material_output.inputs['Surface'].links[0].from_socket
-                            
-                            if bake_type == 'DIFFUSE':
-                                # new temp Material Output node
-                                pb_output_node = self.new_pb_output_node(mat)
-                                pb_output_node[NODE_TAG] = 1
-                                pb_output_node.is_active_output = True
+                        self.prepare_object_for_bake(obj, job_name)
 
-                                material_output.is_active_output = False
-
-                                # temp Diffuse node
-                                pb_diffuse_node_color = [1, 1, 1, 1]
-                                pb_diffuse_node = self.new_pb_diffuse_node(mat, pb_diffuse_node_color)
-
-                                socket_to_pb_diffuse_node_color = pb_diffuse_node.inputs['Color']
-
-                                if job_name in ALPHA_NODES.keys():
-                                    node_type = ALPHA_NODES[job_name]
-                                    self.prepare_for_bake_factor(mat, socket_to_surface, socket_to_pb_diffuse_node_color, node_type)
-
-                                elif job_name == 'Displacement':
-                                    if material_output.inputs['Displacement'].is_linked:
-                                        socket_to_displacement = material_output.inputs['Displacement'].links[0].from_socket
-                                        self.prepare_for_bake(mat, socket_to_displacement, socket_to_pb_diffuse_node_color, 'Height')
-                                
-                                elif job_name == 'Bump':
-                                    self.prepare_for_bake(mat, socket_to_surface, socket_to_pb_diffuse_node_color, 'Height')
-
-                                else:
-                                    self.prepare_for_bake(mat, socket_to_surface, socket_to_pb_diffuse_node_color, job_name)
-
-                                # link pb_diffuse_node to material_output
-                                mat.node_tree.links.new(pb_diffuse_node.outputs[0], pb_output_node.inputs['Surface'])
-                                                    
                     # create temp image node to bake on
                     for mat_slot in self.active_object.material_slots:
                         mat = mat_slot.material
-                        bake_image_node = self.new_image_node(mat)
-                        # bake_image_node.color_space = 'COLOR' if image.colorspace_settings.name == 'sRGB' else 'NONE'
-                        bake_image_node.color_space = 'COLOR' if job_name == 'Color' else 'NONE'
-                        bake_image_node.image = image  # add image to node
-                        bake_image_node[NODE_TAG] = 1  # tag for clean up
-                        # make only bake_image_node active
-                        bake_image_node.select = True
-                        mat.node_tree.nodes.active = bake_image_node
+                        self.create_bake_image_node(mat, image)
 
                     # bake!
                     self.report({'INFO'}, "baking... '{0}'".format(image.name))
-                    # pass_filter = set(['COLOR']) if bake_type == 'DIFFUSE' else set()
+                    bake_type = self.get_bake_type(job_name)
                     if not bake_type == "NORMAL":
                         bake_type = "EMIT"
                     bpy.ops.object.bake(
@@ -958,7 +930,6 @@ class PBAKER_OT_bake(bpy.types.Operator):
                         margin=self.settings.margin,
                         use_clear=False,
                         use_selected_to_active=True)
-                        # pass_filter=pass_filter)
 
                     # save image!
                     image.save()
@@ -967,18 +938,15 @@ class PBAKER_OT_bake(bpy.types.Operator):
                     if self.settings.use_alpha_to_color:
                         if 'Color' in new_images and "Alpha" in new_images:
                             combine_images(new_images['Color'], new_images["Alpha"], 0, 3)
+    
 
                     # clean up!
                     # delete all nodes with tag = NODE_TAG
+                    self.delete_tagged_nodes(self.active_object, NODE_TAG)
                     for obj in self.selected_objects:
-                        for mat_slot in obj.material_slots:
-                            for node in mat_slot.material.node_tree.nodes:
-                                if NODE_TAG in node.keys():
-                                    mat_slot.material.node_tree.nodes.remove(node)
+                        self.delete_tagged_nodes(obj, NODE_TAG)
+
                     for mat_slot in self.active_object.material_slots:
-                        for node in mat_slot.material.node_tree.nodes:
-                            if NODE_TAG in node.keys():
-                                mat_slot.material.node_tree.nodes.remove(node)
                         if MATERIAL_TAG in mat_slot.material.keys():
                             del new_mat[MATERIAL_TAG]
                     
