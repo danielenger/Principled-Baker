@@ -826,7 +826,7 @@ class PBAKER_OT_bake(bpy.types.Operator):
                             bake_type = "EMIT"
                         bpy.ops.object.bake(
                             type=bake_type,
-                            margin=self.settings.margin,
+                            margin=self.render_settings.margin,
                             use_clear=False,
                             use_selected_to_active=False)
 
@@ -927,7 +927,7 @@ class PBAKER_OT_bake(bpy.types.Operator):
                         bake_type = "EMIT"
                     bpy.ops.object.bake(
                         type=bake_type,
-                        margin=self.settings.margin,
+                        margin=self.render_settings.margin,
                         use_clear=False,
                         use_selected_to_active=True)
 
