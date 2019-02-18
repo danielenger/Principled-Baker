@@ -75,6 +75,27 @@ class PBAKER_OT_bake(bpy.types.Operator):
 
     settings = None
 
+    def has_uv_map(self, obj):
+        if len(obj.data.uv_layers) >= 1:
+            return True
+        else:
+            return False
+        
+    def has_material(self, obj):
+        if len(obj.material_slots) >= 1:
+            for mat_slot in obj.material_slots:
+                if not MATERIAL_TAG in mat_slot.material.keys():
+                    material_output = find_active_output(mat_slot.material)
+                    if material_output == None:
+                        return False
+                    else:
+                        if not material_output.inputs['Surface'].is_linked:
+                            return False
+                        else:
+                            return True
+        else:
+            return False
+
     def get_bake_type(self, job_name):
         if job_name == 'Emission':
             return 'EMIT'
@@ -404,21 +425,21 @@ class PBAKER_OT_bake(bpy.types.Operator):
                 alpha = True
             color = (0.5, 0.5, 1.0, alpha_channel) if self.get_bake_type(job_name) == 'NORMAL' else (0.0, 0.0, 0.0, alpha_channel)
 
-            if alpha:
-                fill_image(image, (0.0, 0.0, 0.0, 0.0))
-
-            image = bpy.data.images.new(name=image_file_name, width=res, height=res, alpha=alpha)
-            image.use_alpha = alpha
-            # image.filepath_raw = image_file_path
+            image = bpy.data.images.new(
+                name=image_file_name, 
+                width=res, height=res, 
+                alpha=alpha, 
+                float_buffer=True)
+                # float_buffer=self.settings.use_image_float)
+            
+            image.colorspace_settings.name = 'sRGB' if job_name == 'Color' else 'Non-Color'
+            if self.settings.use_overwrite:
+                image.generated_color = color
+                image.generated_type = 'BLANK'
             image.filepath = image_file_path
             image.file_format = self.settings.file_format
-            image.alpha_mode = 'STRAIGHT'
-            image.colorspace_settings.name = 'sRGB' if job_name == 'Color' else 'Non-Color'
 
-            if self.settings.use_overwrite:
-                fill_image(image, color)
-
-            image.save()
+            # image.save()
         else:
             check_existing = not self.settings.use_overwrite
             image = bpy.data.images.load(image_file_path, check_existing=check_existing)
@@ -538,7 +559,7 @@ class PBAKER_OT_bake(bpy.types.Operator):
                         from_socket = input_socket.links[0].from_socket
                         self.prepare_for_bake(mat, from_socket, new_socket, input_socket_name)
 
-    def prepare_object_for_bake(self, obj, job_name):        
+    def prepare_object_for_bake(self, obj, job_name):
         bake_type = self.get_bake_type(job_name)
         for mat_slot in obj.material_slots:
             mat = mat_slot.material
@@ -702,6 +723,29 @@ class PBAKER_OT_bake(bpy.types.Operator):
 
         return joblist
 
+    def smart_uv_project(self, obj):
+        orig_selected_objects = self.selected_objects        
+        for o in self.selected_objects:
+            o.select_set(False)
+        obj.select_set(True)
+        
+        bpy.ops.uv.smart_project(angle_limit=self.settings.angle_limit, 
+            island_margin=self.settings.island_margin, 
+            user_area_weight=self.settings.user_area_weight, 
+            use_aspect=self.settings.use_aspect, 
+            stretch_to_bounds=self.settings.stretch_to_bounds)
+        
+        for o in orig_selected_objects:
+            o.select_set(True)
+
+    def bake(self, obj, bake_type='EMIT', selected_to_active=False):
+        orig_selected_objects = self.selected_objects        
+        for o in self.selected_objects:
+            o.select_set(False)
+        obj.select_set(True)        
+        bpy.ops.object.bake(type=bake_type, use_selected_to_active=selected_to_active)
+        for o in orig_selected_objects:
+            o.select_set(True)
 
     def execute(self, context):
         self.settings = context.scene.principled_baker_settings
@@ -733,33 +777,6 @@ class PBAKER_OT_bake(bpy.types.Operator):
                 self.report({'ERROR'}, 'Select at least 2 objects!')
                 return {'CANCELLED'}
         
-        # object not mesh or has no material
-        orig_selected_objects = []
-        for obj in self.selected_objects:
-            if obj.type == 'MESH':
-                if not self.render_settings.use_selected_to_active:
-                    if len(obj.material_slots) == 0:
-                        orig_selected_objects.append(obj)
-                        self.selected_objects.remove(obj)
-                        obj.select_set(False)            
-            else:
-                orig_selected_objects.append(obj)
-                self.selected_objects.remove(obj)
-                obj.select_set(False)
-        
-        # error handling: cancel if Material Output is missing or missing inputs in Material Output
-        for obj in self.selected_objects:
-            for mat_slot in obj.material_slots:
-                if not MATERIAL_TAG in mat_slot.material.keys():
-                    material_output = find_active_output(mat_slot.material)
-                    if material_output == None:
-                        self.report({'ERROR'}, 'Material Output missing in "{0}"'.format(mat_slot.material.name))
-                        return {'CANCELLED'}
-                    else:
-                        if not material_output.inputs['Surface'].is_linked:
-                            self.report({'WARNING'}, 'Surface Input missing in Material Output in "{0}"'.format(mat_slot.material.name))
-                            return {'CANCELLED'}                    
-
         joblist = []
         if not self.settings.use_autodetect:
             joblist = self.get_joblist_manual()
@@ -768,7 +785,31 @@ class PBAKER_OT_bake(bpy.types.Operator):
         # bake single or batch:
         ########
         if not self.render_settings.use_selected_to_active:
+
+            bake_objects = []
             for obj in self.selected_objects:
+                if obj.type == 'MESH':
+                    if self.has_uv_map(obj):
+                        print("==== {0} has UV map", obj.name)
+                        if self.has_material(obj):
+                            bake_objects.append(obj)
+                        else:
+                            self.report({'INFO'}, "baking skipped for '{0}'. Material or Material Output missing.".format(obj.name))
+                    else:
+                        print("==== {0} has NO UV map", obj.name)
+                        if self.has_material(obj):
+                            if self.settings.use_smart_uv_project:
+                                self.smart_uv_project(obj)
+                                bake_objects.append(obj)
+                            else:
+                                self.report({'INFO'}, "baking skipped for '{0}'. UV map missing.".format(obj.name))
+                        else:
+                            self.report({'INFO'}, "baking skipped for '{0}'. Material and UV map missing.".format(obj.name))
+
+            print("==== bake_objects = ", bake_objects)
+
+            for obj in bake_objects:
+
                 new_images.clear()
                 
                 # find active material outpus for later clean up
@@ -822,14 +863,10 @@ class PBAKER_OT_bake(bpy.types.Operator):
                         # bake!
                         self.report({'INFO'}, "baking... '{0}'".format(image.name))
                         bake_type = self.get_bake_type(job_name)
-                        if not bake_type == "NORMAL":
-                            bake_type = "EMIT"
-                        bpy.ops.object.bake(
-                            type=bake_type,
-                            margin=self.render_settings.margin,
-                            use_clear=False,
-                            use_selected_to_active=False)
-
+                        if not bake_type == 'NORMAL':
+                            bake_type = 'EMIT'
+                        self.bake(obj, bake_type='EMIT', selected_to_active=False)
+                        
                         # save image!
                         image.save()
 
@@ -857,22 +894,25 @@ class PBAKER_OT_bake(bpy.types.Operator):
                 # add new images to new material
                 if self.settings.use_new_material:
                     self.add_images_to_material(new_mat, new_images)
-            # clean up: reselect original selected objects
-            for obj in orig_selected_objects:
-                obj.select_set(True)
 
         ########
         # bake selected to active:
         ########
         elif self.render_settings.use_selected_to_active:
             new_images.clear()
+
+            bake_objects = []
+            for obj in self.selected_objects:
+                if obj.type == 'MESH':
+                    if self.has_material(obj):
+                        bake_objects.append(obj)
             
             # find active material outpus for later clean up
-            for obj in self.selected_objects:
+            for obj in bake_objects:
                 active_outputs = self.get_active_outputs(obj)
                         
             # populate joblist auto
-            for obj in self.selected_objects:
+            for obj in bake_objects:
                 if self.settings.use_autodetect:
                     job_extend = self.get_joblist_from_object(obj)
                     for j in job_extend:
@@ -884,6 +924,10 @@ class PBAKER_OT_bake(bpy.types.Operator):
             new_mat = self.new_material(new_mat_name)
             self.active_object.data.materials.append(new_mat)
 
+            # auto smart uv project
+            if not self.has_uv_map(self.active_object):
+                self.smart_uv_project(self.active_object)
+
             # go through joblist
             for job_name in joblist:
 
@@ -892,7 +936,7 @@ class PBAKER_OT_bake(bpy.types.Operator):
 
                 # guess color for Transparent, Translucent, Glass, Emission
                 if job_name in self.new_node_colors.keys():
-                    for obj in self.selected_objects:
+                    for obj in bake_objects:
                         self.guess_colors(obj, job_name)
 
                 if not self.settings.use_overwrite and self.exists_new_bake_image_file(obj.name, job_name):# os.path.isfile(image.filepath):
@@ -912,7 +956,7 @@ class PBAKER_OT_bake(bpy.types.Operator):
                     new_images[job_name] = image
 
                     # prepare materials before baking
-                    for obj in self.selected_objects:
+                    for obj in bake_objects:
                         self.prepare_object_for_bake(obj, job_name)
 
                     # create temp image node to bake on
@@ -927,8 +971,6 @@ class PBAKER_OT_bake(bpy.types.Operator):
                         bake_type = "EMIT"
                     bpy.ops.object.bake(
                         type=bake_type,
-                        margin=self.render_settings.margin,
-                        use_clear=False,
                         use_selected_to_active=True)
 
                     # save image!
@@ -943,7 +985,7 @@ class PBAKER_OT_bake(bpy.types.Operator):
                     # clean up!
                     # delete all nodes with tag = NODE_TAG
                     self.delete_tagged_nodes(self.active_object, NODE_TAG)
-                    for obj in self.selected_objects:
+                    for obj in bake_objects:
                         self.delete_tagged_nodes(obj, NODE_TAG)
 
                     for mat_slot in self.active_object.material_slots:
