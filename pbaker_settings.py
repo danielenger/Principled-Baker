@@ -1,13 +1,13 @@
 import bpy
 
-from bpy.props import (StringProperty,
-                       BoolProperty,
-                       IntProperty,
-    # FloatProperty,
+from bpy.props import (StringProperty, 
+    BoolProperty,
+    IntProperty,
+    FloatProperty,
     # FloatVectorProperty,
-                       EnumProperty,
-                       PointerProperty,
-                       )
+    EnumProperty,
+    PointerProperty,
+    )
 
 
 class PBAKER_settings(bpy.types.PropertyGroup):
@@ -165,6 +165,44 @@ class PBAKER_settings(bpy.types.PropertyGroup):
         default=True
     )
 
+    use_smart_uv_project : BoolProperty(
+        name="Auto Smart UV Project",
+        description="",
+        default=False
+    )
+    angle_limit : FloatProperty(
+        name="Angle Limit",
+        default=66.0,
+        min=1.0,
+        max=89.0
+    )
+    island_margin : FloatProperty(
+        name="Island Margin",
+        default=0.0,
+        min=0.0,
+        max=1.0
+    )
+    user_area_weight : FloatProperty(
+        name="Area Weight",
+        default=0.0,
+        min=0.0,
+        max=1.0
+    )
+    use_aspect : BoolProperty(
+        name="Correct Aspect",
+        default=True
+    )
+    stretch_to_bounds : BoolProperty(
+        name="Stretch to UV Bounds",
+        default=True
+    )
+
+    use_image_float : BoolProperty(
+        name="32 bit float",
+        default=False
+    )
+
+
     file_format : EnumProperty(
         name="File Format",
         items=(
@@ -172,7 +210,8 @@ class PBAKER_settings(bpy.types.PropertyGroup):
             ('BMP', 'BMP', ''),
             ('JPEG', 'JPEG', ''),
             ('TIFF', 'TIFF', ''),
-            ('TARGA', 'TARGA', ''),
+            ('TARGA', 'Targa', ''),
+            ('OPEN_EXR', 'OpenEXR', ''),
         ),
         default='PNG'
     )

@@ -57,6 +57,7 @@ IMAGE_FILE_ENDINGS = {
     "JPEG": "jpg",
     "TIFF": "tif",
     "TARGA": "tga",
+    "OPEN_EXR": "exr",
 }
 
 NODE_OFFSET_X = 300
@@ -194,7 +195,10 @@ class PBAKER_OT_bake(bpy.types.Operator):
             mat = mat_slot.material
             if not MATERIAL_TAG in mat.keys():
                 mat_out = find_active_output(mat_slot.material)
-                node_types = ALPHA_NODES[job_name]
+                if job_name == "Emission":
+                    node_types = 'EMISSION'
+                else:
+                    node_types = ALPHA_NODES[job_name]
                 color_list = self.get_value_list_from_node_types(mat_out, 'Color', node_types)
                 if len(color_list) >= 1:
                     self.new_node_colors[job_name] = color_list[0]
@@ -306,8 +310,8 @@ class PBAKER_OT_bake(bpy.types.Operator):
                     
             elif name == 'Emission':
                 emission_node = new_mat.node_tree.nodes.new(type='ShaderNodeEmission')
-                emission_node.inputs['Color'] = self.new_node_colors[name]
-
+                emission_node.inputs['Color'].default_value = self.new_node_colors[name]
+                
                 addshader_node = new_mat.node_tree.nodes.new(type='ShaderNodeAddShader')                
 
                 # links
@@ -437,9 +441,8 @@ class PBAKER_OT_bake(bpy.types.Operator):
                 image.generated_color = color
                 image.generated_type = 'BLANK'
             image.filepath = image_file_path
-            image.file_format = self.settings.file_format
+            # image.file_format = self.settings.file_format
 
-            # image.save()
         else:
             check_existing = not self.settings.use_overwrite
             image = bpy.data.images.load(image_file_path, check_existing=check_existing)
@@ -790,13 +793,11 @@ class PBAKER_OT_bake(bpy.types.Operator):
             for obj in self.selected_objects:
                 if obj.type == 'MESH':
                     if self.has_uv_map(obj):
-                        print("==== {0} has UV map", obj.name)
                         if self.has_material(obj):
                             bake_objects.append(obj)
                         else:
                             self.report({'INFO'}, "baking skipped for '{0}'. Material or Material Output missing.".format(obj.name))
                     else:
-                        print("==== {0} has NO UV map", obj.name)
                         if self.has_material(obj):
                             if self.settings.use_smart_uv_project:
                                 self.smart_uv_project(obj)
@@ -805,8 +806,6 @@ class PBAKER_OT_bake(bpy.types.Operator):
                                 self.report({'INFO'}, "baking skipped for '{0}'. UV map missing.".format(obj.name))
                         else:
                             self.report({'INFO'}, "baking skipped for '{0}'. Material and UV map missing.".format(obj.name))
-
-            print("==== bake_objects = ", bake_objects)
 
             for obj in bake_objects:
 
@@ -865,9 +864,12 @@ class PBAKER_OT_bake(bpy.types.Operator):
                         bake_type = self.get_bake_type(job_name)
                         if not bake_type == 'NORMAL':
                             bake_type = 'EMIT'
-                        self.bake(obj, bake_type='EMIT', selected_to_active=False)
+                        self.bake(obj, bake_type=bake_type, selected_to_active=False)
                         
                         # save image!
+                        if self.settings.use_image_float:
+                            bpy.types.ImageFormatSettings.color_depth = 32
+                        bpy.types.ImageFormatSettings.file_format = IMAGE_FILE_ENDINGS[self.settings.file_format]
                         image.save()
 
                         # clean up: delete all nodes with tag = NODE_TAG
@@ -931,7 +933,6 @@ class PBAKER_OT_bake(bpy.types.Operator):
             # go through joblist
             for job_name in joblist:
 
-                # bake_type
                 bake_type = self.get_bake_type(job_name)                
 
                 # guess color for Transparent, Translucent, Glass, Emission
@@ -974,6 +975,9 @@ class PBAKER_OT_bake(bpy.types.Operator):
                         use_selected_to_active=True)
 
                     # save image!
+                    if self.settings.use_image_float:
+                        bpy.types.ImageFormatSettings.color_depth = 32
+                    bpy.types.ImageFormatSettings.file_format = IMAGE_FILE_ENDINGS[self.settings.file_format]
                     image.save()
 
                     # add alpha channel to color

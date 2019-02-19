@@ -72,11 +72,6 @@ class PBAKER_PT_panel(bpy.types.Panel):
         col = self.layout.box().column(align=True)
         col.prop(settings, "use_new_material")
         col.prop(settings, "new_material_prefix")
-        
-        # settings:
-        col = self.layout.box().column(align=True)        
-        col.prop(settings, "use_exclude_transparent_colors")
-        # col.prop(settings, "use_invert_roughness")
 
         # autodetect
         col = self.layout.box().column(align=True)
@@ -114,3 +109,19 @@ class PBAKER_PT_panel(bpy.types.Panel):
             col.prop(settings, "use_Transmission_Roughness", toggle=True)
             col.prop(settings, "use_Clearcoat_Normal", toggle=True)
             col.prop(settings, "use_Tangent", toggle=True)
+        
+        # settings:
+        col = self.layout.box().column(align=True)
+        # col.prop(settings, "use_image_float")
+        col.prop(settings, "use_exclude_transparent_colors")
+        # col.prop(settings, "use_invert_roughness")
+
+        col = self.layout.box().column(align=True)
+        col.prop(settings, "use_smart_uv_project")
+        if settings.use_smart_uv_project:
+            col.prop(settings, "angle_limit")
+            col.prop(settings, "island_margin")
+            col.prop(settings, "user_area_weight")
+            col.prop(settings, "use_aspect")
+            col.prop(settings, "stretch_to_bounds")
+
