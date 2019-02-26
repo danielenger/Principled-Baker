@@ -1,5 +1,9 @@
 import bpy
-
+from bpy.types import (Panel,
+                       Operator,
+                       AddonPreferences,
+                       PropertyGroup,
+                       )
 from bpy.props import (StringProperty, 
     BoolProperty,
     IntProperty,
@@ -9,8 +13,94 @@ from bpy.props import (StringProperty,
     PointerProperty,
     )
 
+# def color_mode_items(scene, context):
+def color_mode_items(scene, context):
+    if scene.file_format in ['PNG', 'TARGA', 'TIFF', 'OPEN_EXR']:
+        items = [
+            ('BW', "BW", ""),
+            ('RGB', "RGB", ""),
+            ('RGBA', "RGBA", "")
+        ]
+    else:
+        items = [
+            ('BW', "BW", ""),
+            ('RGB', "RGB", "")
+        ]
+    return items
+
+def color_depth_items(scene, context):
+    if scene.file_format == 'OPEN_EXR':
+        items = [
+            ('16', "Float (Half)", ""),
+            ('32', "Float (Full)", "")
+        ]
+    else:
+        items = [
+            ('8', "8", ""),
+            ('16', "16", ""),
+        ]
+    return items
+
 
 class PBAKER_settings(bpy.types.PropertyGroup):
+
+    file_format : EnumProperty(
+        name="File Format",
+        items=(
+            ('PNG', 'PNG', ''),
+            ('BMP', 'BMP', ''),
+            ('JPEG', 'JPEG', ''),
+            ('TIFF', 'TIFF', ''),
+            ('TARGA', 'Targa', ''),
+            ('OPEN_EXR', 'OpenEXR', ''),
+        ),
+        default='PNG'
+    )
+
+    color_mode : EnumProperty(
+        name="Color",
+        items=color_mode_items
+    )
+
+    color_depth : EnumProperty(
+        name="Color Depth",
+        items=color_depth_items
+    )
+
+    exr_codec : EnumProperty(
+        name="Codec",
+        items=(
+            ('NONE', 'None', ''),
+            ('PXR24', 'Pxr24 (lossy)', ''),
+            ('ZIP', 'ZIP (lossless)', ''),
+            ('PIZ', 'PIZ (lossless)', ''),
+            ('RLE', 'RLE (lossless)', ''),
+            ('ZIPS', 'ZIPS (lossless)', ''),
+            ('DWAA', 'DWAA (lossy)', ''),
+        ),
+        default='ZIP'
+    )
+
+    tiff_codec : EnumProperty(
+        name="Compression",
+        items=(
+            ('NONE', 'None', ''),
+            ('DEFLATE', 'Deflate', ''),
+            ('LZW', 'LZW', ''),
+            ('PACKBITS', 'Packbits', '')
+        ),
+        default='DEFLATE'
+    )
+
+    quality : IntProperty(
+        name="Quality",
+        default=90,
+        min=0,
+        soft_max = 100,
+        step=1,
+        subtype='PERCENTAGE'
+    )
+
 
     use_autodetect : BoolProperty(
         name="Autodetect",
@@ -32,11 +122,11 @@ class PBAKER_settings(bpy.types.PropertyGroup):
     resolution : EnumProperty(
         name="Resolution",
         items=(
-            ('custom', 'Custom', ''),
-            ('512', '512', '512'),
-            ('1024', '1024', '1024'),
-            ('2048', '2048', '2048'),
-            ('4096', '4096', '4096'),
+            ('CUSTOM', 'Custom', ''),
+            ('512', '512', ''),
+            ('1024', '1024', ''),
+            ('2048', '2048', ''),
+            ('4096', '4096', ''),
         ),
         default='1024'
     )
@@ -48,6 +138,12 @@ class PBAKER_settings(bpy.types.PropertyGroup):
         max=64
     )
 
+    samples : IntProperty(
+        name="Samples",
+        default=128,
+        min=1
+    )
+
     use_overwrite : BoolProperty(
         name="Overwrite",
         default=False
@@ -55,10 +151,6 @@ class PBAKER_settings(bpy.types.PropertyGroup):
 
     use_alpha : BoolProperty(
         name="Image Alpha",
-        default=False
-    )
-    use_float_buffer : BoolProperty(
-        name="Float Buffer",
         default=False
     )
 
@@ -77,16 +169,20 @@ class PBAKER_settings(bpy.types.PropertyGroup):
         default="_roughness",
         maxlen=1024,
     )
+    suffix_glossiness : StringProperty(
+        name="Glossiness",
+        default="_glossiness",
+        maxlen=1024,
+    )
     
     suffix_specular : StringProperty(
         name="Specular ",
         default="_specular",
-        description="invert Roughness for Specular workflow\nDo not confuse with 'Specular' input of Principled BSDF!",
         maxlen=1024,
     )
     use_invert_roughness : BoolProperty(
-        name="invert Roughness",
-        description="invert Roughness for Specular workflow\nDo not confuse with 'Specular' input of Principled BSDF!",
+        name="Glossiness (invert Roughness)",
+        description="Glossiness from inverted Roughness",
         default=False
     )
 
@@ -124,11 +220,6 @@ class PBAKER_settings(bpy.types.PropertyGroup):
         default="//",
         maxlen=1024,
         subtype='DIR_PATH'
-    )
-
-    use_clear : BoolProperty(
-        name="Clear",
-        default=False
     )
 
     use_selected_to_active : BoolProperty(
@@ -203,32 +294,20 @@ class PBAKER_settings(bpy.types.PropertyGroup):
     )
 
 
-    file_format : EnumProperty(
-        name="File Format",
-        items=(
-            ('PNG', 'PNG', ''),
-            ('BMP', 'BMP', ''),
-            ('JPEG', 'JPEG', ''),
-            ('TIFF', 'TIFF', ''),
-            ('TARGA', 'Targa', ''),
-            ('OPEN_EXR', 'OpenEXR', ''),
-        ),
-        default='PNG'
-    )
-
     suffix_text_mod : EnumProperty(
         name="Convert suffix",
         items=(
-            ('custom', 'Custom', ''),
+            ('CUSTOM', 'Custom', ''),
             ('lower', 'Lower', 'Convert suffix to lowercase letters.'),
             ('upper', 'Upper', 'Convert suffix to capital letters.'),
             ('title', 'Title', 'Convert suffix. First letter capital. Rest lowercase letters.'),
         ),
-        default='custom'
+        default='CUSTOM'
     )
 
     use_Alpha : BoolProperty(name="Alpha/Transparency", default=False)
     use_Emission : BoolProperty(name="Emission", default=False)
+    use_AO : BoolProperty(name="Ambient Occlusion (node)", default=False)
 
     use_Base_Color : BoolProperty(name="Color", default=True)
     use_Metallic : BoolProperty(name="Metallic", default=True)
