@@ -1,6 +1,7 @@
 import bpy
 import os
 import pathlib
+import time
 
 from . pbaker_functions import *
 
@@ -66,6 +67,8 @@ NODE_OFFSET_Y = 200
 IMAGE_NODE_OFFSET_X = -900
 IMAGE_NODE_OFFSET_Y = -260
 IMAGE_NODE_WIDTH = 300
+
+PRINCIPLED_BAKER_TEMP_MATERIAL_NAME = "PRINCIPLED_BAKER_TEMP_MATERIAL_{}".format(time.time())
 
 
 class PBAKER_OT_bake(bpy.types.Operator):
@@ -265,11 +268,15 @@ class PBAKER_OT_bake(bpy.types.Operator):
             suffix = suffix.title()
         return suffix
 
+
+
+
     def delete_tagged_nodes(self, obj, tag):
         for mat_slot in obj.material_slots:
-            for node in mat_slot.material.node_tree.nodes:
-                if NODE_TAG in node.keys():
-                    mat_slot.material.node_tree.nodes.remove(node)
+            if mat_slot.material:
+                for node in mat_slot.material.node_tree.nodes:
+                    if tag in node.keys():
+                        mat_slot.material.node_tree.nodes.remove(node)
 
 
     def guess_colors(self, obj, job_name):
@@ -299,8 +306,9 @@ class PBAKER_OT_bake(bpy.types.Operator):
     def get_active_outputs(self, obj):
         act_out = []
         for mat_slot in obj.material_slots:
-            if not MATERIAL_TAG in mat_slot.material.keys():
-                act_out.append( find_active_output(mat_slot.material) )
+            if mat_slot.material:
+                if not MATERIAL_TAG in mat_slot.material.keys():
+                    act_out.append( find_active_output(mat_slot.material) )
         return act_out
 
     def new_material(self, name):
@@ -920,7 +928,6 @@ class PBAKER_OT_bake(bpy.types.Operator):
 
                 # create new material
                 if self.settings.use_new_material:
-                    # new_mat_name = self.active_object.name if self.settings.new_material_prefix == "" else self.settings.new_material_prefix
                     new_mat_name = obj.name if self.settings.new_material_prefix == "" else self.settings.new_material_prefix
                     new_mat = self.new_material(new_mat_name)
                     obj.data.materials.append(new_mat)
@@ -948,6 +955,8 @@ class PBAKER_OT_bake(bpy.types.Operator):
                                 new_images[job_name] = image
 
                     else:  # do bake
+
+                        remove_empty_material_slots(obj)
 
                         # image to bake on
                         image = self.new_bake_image(obj.name, job_name)
@@ -1032,7 +1041,11 @@ class PBAKER_OT_bake(bpy.types.Operator):
                 if obj.type == 'MESH':
                     if self.has_material(obj):
                         bake_objects.append(obj)
-            
+            if self.active_object in bake_objects:
+                bake_objects.remove(self.active_object)
+
+            remove_empty_material_slots(self.active_object)
+
             # find active material outpus for later clean up
             for obj in bake_objects:
                 active_outputs = self.get_active_outputs(obj)
@@ -1046,7 +1059,10 @@ class PBAKER_OT_bake(bpy.types.Operator):
                             joblist.append(j)
             
             # create new material
-            new_mat_name = self.active_object.name if self.settings.new_material_prefix == "" else self.settings.new_material_prefix
+            if self.settings.use_new_material:
+                new_mat_name = self.active_object.name if self.settings.new_material_prefix == "" else self.settings.new_material_prefix
+            else:
+                new_mat_name = PRINCIPLED_BAKER_TEMP_MATERIAL_NAME
             new_mat = self.new_material(new_mat_name)
             self.active_object.data.materials.append(new_mat)
 
@@ -1067,19 +1083,26 @@ class PBAKER_OT_bake(bpy.types.Operator):
                     for obj in bake_objects:
                         self.guess_colors(obj, job_name)
 
-                if not self.settings.use_overwrite and self.exists_new_bake_image_file(obj.name, job_name):
+                # skip, if no overwrite and image exists
+                obj_name = self.active_object.name
+                image_file_name = self.get_image_file_name(obj_name, job_name)
+
+                if not self.settings.use_overwrite and self.is_image_file(image_file_name):
                     # do not bake!
-                    self.report({'INFO'}, "baking skipped for '{0}'. File exists.".format(self.get_image_file_name(obj.name, job_name)))
+                    self.report({'INFO'}, "baking skipped for '{0}'. File exists.".format(image_file_name))
 
                     # load image for new material
-                    if self.settings.use_new_material:
-                        image = self.new_bake_image(obj.name, job_name)
-                        new_images[job_name] = image
+                    if image_file_name in bpy.data.images:
+                        image = bpy.data.images[image_file_name]
+                    else:
+                        path = self.get_image_file_path(image_file_name)
+                        image = bpy.data.images.load(path)
+                    new_images[job_name] = image
 
                 else:  # do bake
-
+                    
                     # image to bake on
-                    image = self.new_bake_image(obj.name, job_name)
+                    image = self.new_bake_image(obj_name, job_name)
                     # append image to image dict for new material
                     new_images[job_name] = image
 
@@ -1095,8 +1118,8 @@ class PBAKER_OT_bake(bpy.types.Operator):
 
                     # create temp image node to bake on
                     for mat_slot in self.active_object.material_slots:
-                        mat = mat_slot.material
-                        self.create_bake_image_node(mat, image)
+                        if mat_slot.material:
+                            self.create_bake_image_node(mat_slot.material, image)
 
                     # bake!
                     self.report({'INFO'}, "baking '{0}'".format(image.name))
@@ -1123,15 +1146,29 @@ class PBAKER_OT_bake(bpy.types.Operator):
                         self.delete_tagged_nodes(obj, NODE_TAG)
 
                     for mat_slot in self.active_object.material_slots:
-                        if MATERIAL_TAG in mat_slot.material.keys():
-                            del new_mat[MATERIAL_TAG]
-                    
+                        if mat_slot.material:
+                            if MATERIAL_TAG in mat_slot.material.keys():
+                                del new_mat[MATERIAL_TAG]
+
+
                     # reactivate Material Outputs
                     for mat_output in active_outputs:
                         mat_output.is_active_output = True
 
                     progress+=1
                     bpy.context.window_manager.progress_update(progress)
+            
+            # clean up!
+            for mat_slot in self.active_object.material_slots:
+                if mat_slot.material:
+                    if PRINCIPLED_BAKER_TEMP_MATERIAL_NAME in mat_slot.material.name:
+                        index = self.active_object.material_slots.find(PRINCIPLED_BAKER_TEMP_MATERIAL_NAME)
+                        bpy.context.object.active_material_index = index
+                        bpy.ops.object.material_slot_remove({'object': self.active_object})
+
+            if PRINCIPLED_BAKER_TEMP_MATERIAL_NAME in bpy.data.materials.keys():
+                bpy.data.materials.remove(bpy.data.materials[PRINCIPLED_BAKER_TEMP_MATERIAL_NAME])
+
 
             # add alpha channel to color
             if self.settings.use_alpha_to_color and self.settings.color_mode == 'RGBA':
@@ -1139,6 +1176,7 @@ class PBAKER_OT_bake(bpy.types.Operator):
                     new_images["Color"].pixels = get_combined_images(new_images["Color"], new_images["Alpha"], 0, 3)
 
             # add new images to new material
-            self.add_images_to_material(new_mat, new_images)
+            if self.settings.use_new_material:
+                self.add_images_to_material(new_mat, new_images)
             
         return {'FINISHED'}

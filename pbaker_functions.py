@@ -183,3 +183,11 @@ def prepare_for_bake_color(mat, o, n):
             prepare_for_bake_color(mat, o, n)
     else:
         mat.node_tree.links.new(o, n)
+
+
+def remove_empty_material_slots(obj):    
+    for mat_slot in obj.material_slots:
+        if not mat_slot.material:
+            index = obj.material_slots.find('')
+            bpy.context.object.active_material_index = index
+            bpy.ops.object.material_slot_remove({'object': obj})
