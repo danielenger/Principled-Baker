@@ -1,26 +1,18 @@
 # Principled-Baker
 
 
-helps you bake all inputs of Principled BSDFs (and others) to image textures.
+bake all inputs of Principled BSDFs (and other nodes) to image textures
 ---
-
-
 
 [Principled Baker for Blender 2.79](https://github.com/danielenger/Principled-Baker_for_2-79)
 
 
-
-
 Features:
 --
-- Autodetect of what needs to be baked
-
--- Bake only linked inputs of Principled BSDFs (and other surface shaders)
-and
--- Bake inputs with values that differ in different nodes
+- Autodetection of what needs to be baked
 - Manual selection for texture channels
 - Bake single
-- Bake Batch
+- Bake batch
 - Bake Selected to Active
 
 ---
