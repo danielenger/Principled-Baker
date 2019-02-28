@@ -1,6 +1,4 @@
 # Principled-Baker
-
-
 bake all inputs of Principled BSDFs (and other nodes) to image textures
 ---
 
@@ -33,15 +31,15 @@ Deactivate "Exclude Transparent Colors" to bake transparent inputs to Color Text
 If just a Bump node is in the node tree, the Normal Map will always be baked.
 If a Normal Map and a Bump Map is baked, the Bump node will not be linked in newly created material.
 
-- Some results from complex mixed shader node trees might not be useful.
+- Some results from complex mixed shader node trees might not be useful
 
 - new Ambient Occlusion texture is not connected in newly generated material
 
 - known issues:
--- results for Subsurface Radius is not useful 
--- results for Tangent might not be useful
--- batch baking with shared materials gives useless, half baked image textures
--- typo in github name (can not be solved)
+  * results for Subsurface Radius is not useful 
+  * results for Tangent might not be useful
+  * batch baking with shared materials can gives useless, half baked image textures
+  * typo in github name (can not be solved?)
 
 
 ***
