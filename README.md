@@ -38,7 +38,7 @@ If a Normal Map and a Bump Map is baked, the Bump node will not be linked in new
 - known issues:
   * results for Subsurface Radius is not useful 
   * results for Tangent might not be useful
-  * batch baking with shared materials can gives useless, half baked image textures
+  * batch baking with shared materials can give useless, half baked image textures
   * typo in github name (can not be solved?)
 
 
