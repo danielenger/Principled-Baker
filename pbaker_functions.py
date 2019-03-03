@@ -39,9 +39,10 @@ def new_rgb_node(mat, color=[0, 0, 0, 1]):
     return node
 
 
-def new_mixrgb_node(mat, color1=[0, 0, 0, 1], color2=[0, 0, 0, 1]):
+def new_mixrgb_node(mat, fac=0.5, color1=[0, 0, 0, 1], color2=[0, 0, 0, 1]):
     node = mat.node_tree.nodes.new(type="ShaderNodeMixRGB")
     node[PRINCIPLED_NODE_TAG] = 1
+    node.inputs[0].default_value = fac
     node.inputs[1].default_value = color1
     node.inputs[2].default_value = color2
     node.color = (0.8, 0.8, 0.8)
@@ -136,56 +137,73 @@ def save_image_as(image, file_path, file_format, color_mode='RGB', color_depth='
 def prepare_for_bake_color(mat, o, n):
 
     node = o.node
-    
-    if node.type == 'MIX_RGB':
-        color1 = node.inputs['Color1'].default_value
-        color2 = node.inputs['Color2'].default_value
-        new_node = new_mixrgb_node(mat, color1, color2)
-        new_node.inputs['Fac'].default_value = node.inputs['Fac'].default_value
-        
-        mat.node_tree.links.new(new_node.outputs[0], n)
-        
-        use_fac = False
-        if node.inputs['Color1'].is_linked:
-            from_node = node.inputs['Color1'].links[0].from_node
-            if from_node.type == 'AMBIENT_OCCLUSION' and from_node.inputs['Color'].is_linked:
-                use_fac = True
-        if node.inputs['Color2'].is_linked:
-            from_node = node.inputs['Color2'].links[0].from_node
-            if from_node.type == 'AMBIENT_OCCLUSION' and from_node.inputs['Color'].is_linked:
-                use_fac = True
 
-        if node.inputs['Fac'].is_linked and use_fac:
-            o = node.inputs['Fac'].links[0].from_socket
-            n = new_node.inputs['Fac']
-            prepare_for_bake_color(mat, o, n)
-            
-        if node.inputs['Color1'].is_linked:
-            from_node = node.inputs['Color1'].links[0].from_node
-            if from_node.type == 'AMBIENT_OCCLUSION':
-                new_node.inputs['Fac'].default_value = 1
-            o = node.inputs['Color1'].links[0].from_socket
-            n = new_node.inputs['Color1']
-            prepare_for_bake_color(mat, o, n)
-            
-        if node.inputs['Color2'].is_linked:
-            from_node = node.inputs['Color2'].links[0].from_node
-            if from_node.type == 'AMBIENT_OCCLUSION':
-                new_node.inputs['Fac'].default_value = 0
-            o = node.inputs['Color2'].links[0].from_socket
-            n = new_node.inputs['Color2']
-            prepare_for_bake_color(mat, o, n)
-    # AO
-    elif node.type == 'AMBIENT_OCCLUSION':
-        color = node.inputs['Color'].default_value
-        if node.inputs['Color'].is_linked:
-            o = node.inputs['Color'].links[0].from_socket
-            prepare_for_bake_color(mat, o, n)
-    else:
+    if not is_node_type_in_node_tree(node, 'AMBIENT_OCCLUSION'):
         mat.node_tree.links.new(o, n)
+    
+    else:
+        if node.type == 'MIX_RGB':
+            color1 = node.inputs['Color1'].default_value
+            color2 = node.inputs['Color2'].default_value
+            fac = node.inputs['Fac'].default_value
+            new_node = new_mixrgb_node(mat, fac, color1, color2)
+            new_node.inputs['Fac'].default_value = node.inputs['Fac'].default_value            
+            mat.node_tree.links.new(new_node.outputs[0], n)
+
+            if node.blend_type == 'MIX':
+     
+                if node.inputs['Fac'].is_linked:
+                    o = node.inputs['Fac'].links[0].from_socket
+                    n = new_node.inputs['Fac']
+                    mat.node_tree.links.new(o, n)
+
+                if node.inputs['Color1'].is_linked:
+                    from_node = node.inputs['Color1'].links[0].from_node
+                    if from_node.type == 'AMBIENT_OCCLUSION':
+                        new_node.inputs['Color1'].default_value = from_node.inputs['Color'].default_value
+                    o = node.inputs['Color1'].links[0].from_socket
+                    n = new_node.inputs['Color1']
+                    prepare_for_bake_color(mat, o, n)
+
+                if node.inputs['Color2'].is_linked:
+                    from_node = node.inputs['Color2'].links[0].from_node
+                    if from_node.type == 'AMBIENT_OCCLUSION':
+                        new_node.inputs['Color2'].default_value = from_node.inputs['Color'].default_value
+                    o = node.inputs['Color2'].links[0].from_socket
+                    n = new_node.inputs['Color2']
+                    prepare_for_bake_color(mat, o, n)
+
+            else:
+               
+                if node.inputs['Color1'].is_linked:
+                    from_node = node.inputs['Color1'].links[0].from_node
+                    if from_node.type == 'AMBIENT_OCCLUSION':
+                        new_node.inputs['Fac'].default_value = 1
+                        new_node.inputs['Color1'].default_value = from_node.inputs['Color'].default_value
+                        o = node.inputs['Color2'].links[0].from_socket
+                        n = new_node.inputs['Color2']
+                        prepare_for_bake_color(mat, o, n)
+
+                if node.inputs['Color2'].is_linked:
+                    from_node = node.inputs['Color2'].links[0].from_node
+                    if from_node.type == 'AMBIENT_OCCLUSION':
+                        new_node.inputs['Fac'].default_value = 0
+                        new_node.inputs['Color2'].default_value = from_node.inputs['Color'].default_value
+                        o = node.inputs['Color1'].links[0].from_socket
+                        n = new_node.inputs['Color1']
+                        prepare_for_bake_color(mat, o, n)
+
+        # skip over AO, if linked
+        elif node.type == 'AMBIENT_OCCLUSION':
+            color = node.inputs['Color'].default_value
+            if node.inputs['Color'].is_linked:
+                o = node.inputs['Color'].links[0].from_socket
+                prepare_for_bake_color(mat, o, n)
+        else:
+            mat.node_tree.links.new(o, n)
 
 
-def remove_empty_material_slots(obj):    
+def remove_empty_material_slots(obj):
     for mat_slot in obj.material_slots:
         if not mat_slot.material:
             index = obj.material_slots.find('')
