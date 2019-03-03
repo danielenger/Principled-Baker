@@ -33,6 +33,10 @@ If a Normal Map and a Bump Map is baked, the Bump node will not be linked in new
 
 - Some results from complex mixed shader node trees might not be useful
 
+- no bake from Ambient Occlusion Shader in 2.79
+
+- bake Ambient Occlusion only from one node per material (highest node in tree)
+
 - new Ambient Occlusion texture is not connected in newly generated material
 
 - known issues:
