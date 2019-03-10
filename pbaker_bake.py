@@ -113,8 +113,6 @@ class PBAKER_OT_bake(bpy.types.Operator):
             joblist.append("Emission")
         if self.settings.use_AO:
             joblist.append("AO")
-        if self.settings.use_vertex_color:
-            joblist.append("Vertex_Color")
 
         if self.settings.use_Base_Color:
             joblist.append("Color")
