@@ -83,6 +83,7 @@ class PBAKER_PT_panel(bpy.types.Panel):
             col.prop(settings, "suffix_normal")
             col.prop(settings, "suffix_bump")
             col.prop(settings, "suffix_displacement")
+            col.prop(settings, "suffix_vertex_color")
             row = col.row()
             row.prop(settings, 'suffix_text_mod', expand=True)
 
@@ -97,21 +98,23 @@ class PBAKER_PT_panel(bpy.types.Panel):
         col.separator()
 
 
-        if settings.use_autodetect:
-            col.prop(settings, "use_Bump")
-        else:
+        if not settings.use_autodetect:
+        #     col.prop(settings, "use_Bump")
+        # else:
             col.prop(settings, "use_Base_Color", toggle=True)
             col.prop(settings, "use_Metallic", toggle=True)
             col.prop(settings, "use_Roughness", toggle=True)
 
             col.prop(settings, "use_Normal", toggle=True)
-            col.prop(settings, "use_Bump", toggle=True)
+            # col.prop(settings, "use_Bump", toggle=True)
             col.prop(settings, "use_Displacement", toggle=True)
 
             col.separator()
             col.prop(settings, "use_Alpha", toggle=True)
             col.prop(settings, "use_Emission", toggle=True)
-            col.prop(settings, "use_AO", toggle=True)
+            # 2.80
+            if bpy.app.version_string.startswith('2.8'):
+                col.prop(settings, "use_AO", toggle=True)
 
             col.separator()
             col.prop(settings, "use_Subsurface", toggle=True)
@@ -132,9 +135,15 @@ class PBAKER_PT_panel(bpy.types.Panel):
             col.prop(settings, "use_Tangent", toggle=True)
         
         col.prop(settings, "use_invert_roughness")
+        col.prop(settings, "use_Bump")
+        col.prop(settings, "use_vertex_color")
 
         # settings:
         col = self.layout.box().column(align=True)
+        col.label(text="Auto Smooth:" )
+        row = col.row()
+        row.prop(settings, "auto_smooth", text="Auto Smooth", expand=True)
+        col.separator()
         if settings.color_mode == 'RGBA':
             col.prop(settings, "use_alpha_to_color")
         col.prop(settings, "use_exclude_transparent_colors")

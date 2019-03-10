@@ -13,7 +13,6 @@ from bpy.props import (StringProperty,
     PointerProperty,
     )
 
-# def color_mode_items(scene, context):
 def color_mode_items(scene, context):
     if scene.file_format in ['PNG', 'TARGA', 'TIFF', 'OPEN_EXR']:
         items = [
@@ -201,6 +200,11 @@ class PBAKER_settings(bpy.types.PropertyGroup):
         default="_displacement",
         maxlen=1024,
     )
+    suffix_vertex_color : StringProperty(
+        name="Vertex Color",
+        default="_vertex",
+        maxlen=1024,
+    )
 
     image_prefix : StringProperty(
         name="Prefix (Texture Name)",
@@ -305,9 +309,23 @@ class PBAKER_settings(bpy.types.PropertyGroup):
         default='CUSTOM'
     )
 
+
+    auto_smooth : EnumProperty(
+        name="Auto Smooth",
+        items=(
+            ('OBJECT', 'Object', 'Auto Smooth per Object'),
+            ('ON', 'ON', 'Bake with Auto Smooth'),
+            ('OFF', 'OFF', 'Bake without Auto Smooth'),
+        ),
+        default='OBJECT'
+    )
+
+
+
     use_Alpha : BoolProperty(name="Alpha/Transparency", default=False)
     use_Emission : BoolProperty(name="Emission", default=False)
     use_AO : BoolProperty(name="Ambient Occlusion (node)", default=False)
+    use_vertex_color : BoolProperty(name="Vertex Color", default=False)
 
     use_Base_Color : BoolProperty(name="Color", default=True)
     use_Metallic : BoolProperty(name="Metallic", default=True)

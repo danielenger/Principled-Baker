@@ -50,6 +50,11 @@ def new_mixrgb_node(mat, fac=0.5, color1=[0, 0, 0, 1], color2=[0, 0, 0, 1]):
     return node
 
 
+def new_image_node(material):
+    image_node = material.node_tree.nodes.new(type="ShaderNodeTexImage")
+    return image_node
+
+
 def get_combined_images(img1, img2, from_channel, to_channel):
     n = 4
     size = img1.size[0] * img1.size[1]
@@ -133,7 +138,6 @@ def save_image_as(image, file_path, file_format, color_mode='RGB', color_depth='
         # image.update()
 
 
-
 def prepare_for_bake_color(mat, o, n):
 
     node = o.node
@@ -180,18 +184,20 @@ def prepare_for_bake_color(mat, o, n):
                     if from_node.type == 'AMBIENT_OCCLUSION':
                         new_node.inputs['Fac'].default_value = 1
                         new_node.inputs['Color1'].default_value = from_node.inputs['Color'].default_value
-                        o = node.inputs['Color2'].links[0].from_socket
-                        n = new_node.inputs['Color2']
-                        prepare_for_bake_color(mat, o, n)
+                        if node.inputs['Color2'].is_linked:
+                            o = node.inputs['Color2'].links[0].from_socket
+                            n = new_node.inputs['Color2']
+                            prepare_for_bake_color(mat, o, n)
 
                 if node.inputs['Color2'].is_linked:
                     from_node = node.inputs['Color2'].links[0].from_node
                     if from_node.type == 'AMBIENT_OCCLUSION':
                         new_node.inputs['Fac'].default_value = 0
                         new_node.inputs['Color2'].default_value = from_node.inputs['Color'].default_value
-                        o = node.inputs['Color1'].links[0].from_socket
-                        n = new_node.inputs['Color1']
-                        prepare_for_bake_color(mat, o, n)
+                        if node.inputs['Color1'].is_linked:
+                            o = node.inputs['Color1'].links[0].from_socket
+                            n = new_node.inputs['Color1']
+                            prepare_for_bake_color(mat, o, n)
 
         # skip over AO, if linked
         elif node.type == 'AMBIENT_OCCLUSION':
