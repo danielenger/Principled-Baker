@@ -39,6 +39,8 @@ If a Normal Map and a Bump Map is baked, the Bump node will not be linked in new
 
 - new Ambient Occlusion texture is not connected in newly generated material
 
+- Vertex Color baking only works, if the object has a material (will be fixed)
+
 - known issues:
   * results for Subsurface Radius is not useful 
   * results for Tangent might not be useful
