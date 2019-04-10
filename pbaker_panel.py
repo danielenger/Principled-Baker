@@ -22,24 +22,11 @@ class PBAKER_PT_panel(bpy.types.Panel):
         else:
             self.layout.label(text="Set Render engine to Cycles! {} is not supported (yet).".format(bpy.context.scene.render.engine), icon='ERROR')
 
-        # box = self.layout.box()
-        # bake/render options:
+
         col = self.layout.box().column(align=True)
-        col.prop(render_settings, "margin")
-        # col.prop(render_settings, "use_clear", text="Clear Image")
-        col.separator()
-        col.prop(render_settings, "use_selected_to_active")
-        sub = col.column()
-        sub.active = render_settings.use_selected_to_active
-        sub.prop(render_settings, "use_cage", text="Cage")
-        if render_settings.use_cage:
-            sub.prop(render_settings, "cage_extrusion", text="Extrusion")
-            sub.prop(render_settings, "cage_object", text="Cage Object")
-        else:
-            sub.prop(render_settings, "cage_extrusion", text="Ray Distance")
-        
-        col.separator()
-        col.prop(settings, "samples")
+        row = col.row()
+        row.prop(settings, "bake_mode", text="Bake Mode", expand=True)
+
 
         # output options:
         col = self.layout.box().column(align=True)
@@ -59,7 +46,24 @@ class PBAKER_PT_panel(bpy.types.Panel):
         row.prop(settings, "color_mode", text="Color", expand=True)
         row = col.row()
         row.prop(settings, "color_depth", text="Color Depth", expand=True)
-        
+
+        col.separator()
+        col.prop(settings, "samples")
+
+        # bake/render options:
+        col = self.layout.box().column(align=True)
+        col.label(text="Selected to Active:")
+        col.prop(render_settings, "margin")
+
+        sub = col.column()
+        sub.prop(render_settings, "use_cage", text="Cage")
+        if render_settings.use_cage:
+            sub.prop(render_settings, "cage_extrusion", text="Extrusion")
+            sub.prop(render_settings, "cage_object", text="Cage Object")
+        else:
+            sub.prop(render_settings, "cage_extrusion", text="Ray Distance")
+
+
         if settings.file_format == 'OPEN_EXR':
             col.prop(settings, "exr_codec", text="Codec")
 
@@ -84,6 +88,7 @@ class PBAKER_PT_panel(bpy.types.Panel):
             col.prop(settings, "suffix_bump")
             col.prop(settings, "suffix_displacement")
             col.prop(settings, "suffix_vertex_color")
+            col.prop(settings, "suffix_material_id")
             row = col.row()
             row.prop(settings, 'suffix_text_mod', expand=True)
 
@@ -99,14 +104,11 @@ class PBAKER_PT_panel(bpy.types.Panel):
 
 
         if not settings.use_autodetect:
-        #     col.prop(settings, "use_Bump")
-        # else:
             col.prop(settings, "use_Base_Color", toggle=True)
             col.prop(settings, "use_Metallic", toggle=True)
             col.prop(settings, "use_Roughness", toggle=True)
 
             col.prop(settings, "use_Normal", toggle=True)
-            # col.prop(settings, "use_Bump", toggle=True)
             col.prop(settings, "use_Displacement", toggle=True)
 
             col.separator()
@@ -137,24 +139,38 @@ class PBAKER_PT_panel(bpy.types.Panel):
         col.prop(settings, "use_invert_roughness")
         col.prop(settings, "use_Bump")
         col.prop(settings, "use_vertex_color")
+        col.prop(settings, "use_material_id")
 
         # settings:
         col = self.layout.box().column(align=True)
-        col.label(text="Auto Smooth:" )
+        col.label(text="Auto Smooth:")
         row = col.row()
         row.prop(settings, "auto_smooth", text="Auto Smooth", expand=True)
         col.separator()
         if settings.color_mode == 'RGBA':
             col.prop(settings, "use_alpha_to_color")
+        
+        col = self.layout.box().column(align=True)
         col.prop(settings, "use_exclude_transparent_colors")
 
 
-        col = self.layout.box().column(align=True)
-        col.prop(settings, "use_smart_uv_project")
-        if settings.use_smart_uv_project:
-            col.prop(settings, "angle_limit")
-            col.prop(settings, "island_margin")
-            col.prop(settings, "user_area_weight")
-            col.prop(settings, "use_aspect")
-            col.prop(settings, "stretch_to_bounds")
-
+        if bpy.app.version_string.startswith('2.7') and settings.bake_mode == 'COMBINED':
+            self.layout.label(text="Auto UV unwrap not available in Blender 2.79 for multiple objects.", icon='INFO')
+        else:                
+            col = self.layout.box().column(align=True)
+            col.label(text="Auto UV unwrap:")
+            row = col.row()
+            row.prop(settings, "auto_uv_project", text="Auto UV Project", expand=True)
+            if settings.auto_uv_project == 'SMART':
+                col.prop(settings, "angle_limit")
+                col.prop(settings, "island_margin")
+                col.prop(settings, "user_area_weight")
+                col.prop(settings, "use_aspect")
+                col.prop(settings, "stretch_to_bounds")
+            elif settings.auto_uv_project == 'LIGHTMAP':
+                col.prop(settings, "share_tex_space")
+                col.prop(settings, "new_uv_map")
+                col.prop(settings, "new_image")
+                col.prop(settings, "image_size")
+                col.prop(settings, "pack_quality")
+                col.prop(settings, "lightmap_margin")

@@ -18,7 +18,7 @@ bl_info = {
     "name": "Principled Baker",
     "description": "bakes all inputs of Principled BSDF to image textures",
     "author": "Daniel Engler",
-    "version": (0, 2, 3),
+    "version": (0, 2, 4),
     "blender": (2, 80, 0),
     "location": "Node Editor Toolbar",
     "category": "Node",
@@ -27,10 +27,13 @@ bl_info = {
 import bpy
 
 from . pbaker_settings import PBAKER_settings
+from . pbaker_prefs import PBAKER_prefs
 from . pbaker_panel import PBAKER_PT_panel
 from . pbaker_bake import PBAKER_OT_bake
 
+
 def register():
+   bpy.utils.register_class(PBAKER_prefs)
    bpy.utils.register_class(PBAKER_settings)
    bpy.utils.register_class(PBAKER_OT_bake)
    bpy.utils.register_class(PBAKER_PT_panel)
@@ -41,6 +44,7 @@ def unregister():
    bpy.utils.unregister_class(PBAKER_PT_panel)
    bpy.utils.unregister_class(PBAKER_OT_bake)
    bpy.utils.unregister_class(PBAKER_settings)
+   bpy.utils.unregister_class(PBAKER_prefs)
    del bpy.types.Scene.principled_baker_settings
 
 

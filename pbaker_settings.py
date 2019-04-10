@@ -205,6 +205,11 @@ class PBAKER_settings(bpy.types.PropertyGroup):
         default="_vertex",
         maxlen=1024,
     )
+    suffix_material_id : StringProperty(
+        name="Material ID",
+        default="_MatID",
+        maxlen=1024,
+    )
 
     image_prefix : StringProperty(
         name="Prefix (Texture Name)",
@@ -226,10 +231,26 @@ class PBAKER_settings(bpy.types.PropertyGroup):
         subtype='DIR_PATH'
     )
 
+    use_batch : BoolProperty(
+        name="Single/Batch",
+        default=False
+    )
+
     use_selected_to_active : BoolProperty(
         name="Selected to Active",
         default=False
     )
+
+    bake_mode : EnumProperty(
+        name="Bake Mode",
+        items=(
+            ('COMBINED', 'Combined', 'Bake a single selected object or bake multiple objects with shared UV maps.\n(like Blenders default bake)'),
+            ('BATCH', 'Single/Batch', 'Bake every selected object separately.'),
+            ('SELECTED_TO_ACTIVE', 'Selected to Active', ''),
+        ),
+        default='COMBINED'
+    )
+
 
     use_new_material : BoolProperty(
         name="Add New Material",
@@ -265,6 +286,18 @@ class PBAKER_settings(bpy.types.PropertyGroup):
         description="",
         default=False
     )
+
+    auto_uv_project : EnumProperty(
+        name="Auto UV Project",
+        items=(
+            ('OFF', 'Off', ''),
+            ('SMART', 'Smart UV Project', ''),
+            ('LIGHTMAP', 'Lightmap Pack', ''),
+        ),
+        default='OFF'
+    )
+
+    # Smart UV Project:
     angle_limit : FloatProperty(
         name="Angle Limit",
         default=66.0,
@@ -291,6 +324,39 @@ class PBAKER_settings(bpy.types.PropertyGroup):
         name="Stretch to UV Bounds",
         default=True
     )
+
+    # Lightmap Pack:
+    share_tex_space : BoolProperty(
+        name="Share Tex Space",
+        default=True
+    )
+    new_uv_map : BoolProperty(
+        name="New UV Map",
+        default=False
+    )
+    new_image : BoolProperty(
+        name="New Image",
+        default=False
+    )
+    image_size : IntProperty(
+        name="Image Size",
+        default=512,
+        min=64,
+        max=5000
+    )
+    pack_quality : IntProperty(
+        name="Pack Quality",
+        default=12,
+        min=1,
+        max=48
+    )
+    lightmap_margin : FloatProperty(
+        name="Margin",
+        default=0.10,
+        min=0.0,
+        max=1.0
+    )
+
 
     use_image_float : BoolProperty(
         name="32 bit float",
@@ -326,6 +392,7 @@ class PBAKER_settings(bpy.types.PropertyGroup):
     use_Emission : BoolProperty(name="Emission", default=False)
     use_AO : BoolProperty(name="Ambient Occlusion (node)", default=False)
     use_vertex_color : BoolProperty(name="Vertex Color", default=False)
+    use_material_id : BoolProperty(name="Material ID", default=False)
 
     use_Base_Color : BoolProperty(name="Color", default=True)
     use_Metallic : BoolProperty(name="Metallic", default=True)

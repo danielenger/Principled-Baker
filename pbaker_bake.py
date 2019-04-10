@@ -2,6 +2,8 @@ import bpy
 import os
 import pathlib
 import time
+from mathutils import Color
+import hashlib
 
 from . pbaker_functions import *
 
@@ -82,7 +84,6 @@ class PBAKER_OT_bake(bpy.types.Operator):
     def has_material(self, obj):
         if len(obj.material_slots) >= 1:
             for mat_slot in obj.material_slots:
-                # TODO 
                 try:
                     if not MATERIAL_TAG in mat_slot.material.keys():
                         material_output = find_active_output(mat_slot.material)
@@ -174,7 +175,8 @@ class PBAKER_OT_bake(bpy.types.Operator):
                             value_list.extend(self.get_value_list(material_output, value_name))
                     if len(value_list) >= 1:
                         if is_list_equal(value_list):
-                            if self.settings.use_new_material or self.render_settings.use_selected_to_active:
+                            # if self.settings.use_new_material or self.render_settings.use_selected_to_active:
+                            if self.settings.use_new_material or self.settings.bake_mode == 'SELECTED_TO_ACTIVE':
                                 self.new_principled_node_settings[value_name] = value_list[0]
                         else:
                             joblist.append(value_name)
@@ -225,8 +227,6 @@ class PBAKER_OT_bake(bpy.types.Operator):
                             if not socket_name in joblist:
                                 joblist.append(socket_name)
                 
-                # TODO remove 'color' from joblist, if added from Normal Map Color input?
-
         # force bake of Color, if user wants alpha in color
         if self.settings.use_alpha_to_color and self.settings.color_mode == 'RGBA':
             if not 'Color' in joblist:
@@ -450,7 +450,7 @@ class PBAKER_OT_bake(bpy.types.Operator):
                     mid_offset_y = alpha_node.location.y
                     mixshader_node.location = (sib.location.x + NODE_OFFSET_X, mid_offset_y)
                 
-                # AO
+                # mix AO with color
                 if 'AO' in new_images.keys():
                     ao_image_node = new_image_node(new_mat)
                     ao_image_node.label = 'Ambient Occlusion'
@@ -474,11 +474,8 @@ class PBAKER_OT_bake(bpy.types.Operator):
                     new_mat.node_tree.links.new(ao_image_node.outputs["Color"],
                                         mix_node.inputs['Color2'])
 
-            # AO
-            elif name == 'AO':
-                pass
-            
-            elif name == "Vertex_Color":
+            # skip some
+            elif name in ["AO", "Vertex_Color", "MatID"]:
                 pass
 
             else:
@@ -518,9 +515,17 @@ class PBAKER_OT_bake(bpy.types.Operator):
         return os.path.join(path, image_file_name)
 
     def new_bake_image(self, object_name, job_name):
-        prefix = self.settings.image_prefix
-        if prefix == "" or len(self.selected_objects) > 1 or self.settings.use_object_name:
+        if self.settings.bake_mode == 'BATCH':
             prefix = self.settings.image_prefix + object_name
+        else:
+            if self.settings.use_object_name:
+                prefix = self.settings.image_prefix + object_name
+            else:
+                if self.settings.image_prefix:
+                    prefix = self.settings.image_prefix
+                else:
+                    prefix = object_name
+
         file_format = IMAGE_FILE_FORMAT_ENDINGS[self.settings.file_format]
         name = "{0}{1}.{2}".format(prefix, self.get_suffix(job_name), file_format)  # include ending
         path = self.get_image_file_path(name)
@@ -591,6 +596,13 @@ class PBAKER_OT_bake(bpy.types.Operator):
         node[NODE_TAG] = 1  # tag for clean up
         node.attribute_name = active_vert_col
         mat.node_tree.links.new(node.outputs['Color'], new_socket)
+
+    def prepare_for_bake_material_id(self, obj, mat, new_socket):
+        n = len(obj.material_slots)
+        print(n)
+        # color = ?
+        # node = new_rgb_node(mat, color)
+        # mat.node_tree.links.new(node.outputs['Color'], new_socket)
 
 
     def prepare_for_bake_factor(self, mat, socket, new_socket, node_type, factor_name='Fac'):
@@ -727,8 +739,17 @@ class PBAKER_OT_bake(bpy.types.Operator):
                         self.prepare_for_bake(mat, from_socket, new_socket, input_socket_name)
 
     def prepare_object_for_bake(self, obj, job_name):
-        bake_type = self.get_bake_type(job_name)
+        
+        # skip already prepared materials
         for mat_slot in obj.material_slots:
+            # mat = mat_slot.material
+            for n in mat_slot.material.node_tree.nodes:
+                if NODE_TAG in n.keys():
+                    return
+
+        bake_type = self.get_bake_type(job_name)
+        for mat_index in range(0,len(obj.material_slots)):
+            mat_slot = obj.material_slots[mat_index]
             mat = mat_slot.material
             if not MATERIAL_TAG in mat.keys():
                 # material_output = find_node_by_type(mat, 'OUTPUT_MATERIAL')
@@ -770,6 +791,20 @@ class PBAKER_OT_bake(bpy.types.Operator):
                         self.prepare_for_bake_ao(mat, socket_to_surface, socket_to_pb_diffuse_node_color)
                     elif job_name == 'Vertex_Color':
                         self.prepare_for_bake_vertex_color(obj, mat, socket_to_pb_diffuse_node_color)
+                    elif job_name == 'MatID':
+                        color = [0, 0, 0, 1]
+                        if self.prefs.mat_id_algorithm == 'HUE':
+                            c = Color()
+                            c.hsv = mat_index/len(obj.material_slots), self.prefs.mat_id_saturation, self.prefs.mat_id_value
+                            color = c.r, c.g, c.b, 1.0
+                        elif self.prefs.mat_id_algorithm == 'NAME':                            
+                            s = mat.name.encode('utf-8')
+                            h = int(hashlib.sha1(s).hexdigest(), base=16)
+                            r = h % 256 / 256
+                            g = (h >> 32) % 256 / 256
+                            b = (h >> 16) % 256 / 256
+                            color = r, g, b, 1.0
+                        pb_diffuse_node.inputs["Color"].default_value = color
                     else:
                         self.prepare_for_bake(mat, socket_to_surface, socket_to_pb_diffuse_node_color, job_name)
 
@@ -849,22 +884,45 @@ class PBAKER_OT_bake(bpy.types.Operator):
         find_values(node, value_name, node_types)
         return value_list
 
-    def smart_uv_project(self, obj):
-        orig_selected_objects = self.selected_objects
-        for o in self.selected_objects:
-            select_set(o, False)
-        select_set(obj, True)
-        
+
+    def smart_project(self):
         bpy.ops.uv.smart_project(angle_limit=self.settings.angle_limit, 
             island_margin=self.settings.island_margin, 
             user_area_weight=self.settings.user_area_weight, 
             use_aspect=self.settings.use_aspect, 
             stretch_to_bounds=self.settings.stretch_to_bounds)
+    
+    def lightmap_pack(self):
+        bpy.ops.uv.lightmap_pack(PREF_CONTEXT='ALL_FACES', 
+            PREF_PACK_IN_ONE=self.settings.share_tex_space, 
+            PREF_NEW_UVLAYER=self.settings.new_uv_map, 
+            PREF_APPLY_IMAGE=self.settings.new_image, 
+            PREF_IMG_PX_SIZE=self.settings.image_size, 
+            PREF_BOX_DIV=self.settings.pack_quality, 
+            PREF_MARGIN_DIV=self.settings.lightmap_margin)
+
+    def auto_uv_project(self, obj):
+        orig_selected_objects = self.selected_objects
+        for o in self.selected_objects:
+            select_set(o, False)
+        select_set(obj, True)
+
+        if self.settings.auto_uv_project == 'SMART':
+            self.smart_project()
+        elif self.settings.auto_uv_project == 'LIGHTMAP':
+            self.lightmap_pack()
         
         for o in orig_selected_objects:
             select_set(o, True)
 
-    def bake(self, obj, bake_type, selected_to_active=False):
+
+    def bake(self, bake_type):
+        org_samples = bpy.context.scene.cycles.samples
+        bpy.context.scene.cycles.samples = self.settings.samples
+        bpy.ops.object.bake(type=bake_type, use_selected_to_active=False)
+        bpy.context.scene.cycles.samples = org_samples
+
+    def bake_single(self, obj, bake_type):
         org_selected_objects = bpy.context.selected_objects
         for o in bpy.context.selected_objects:
             select_set(o, False)
@@ -873,15 +931,29 @@ class PBAKER_OT_bake(bpy.types.Operator):
         org_samples = bpy.context.scene.cycles.samples
         bpy.context.scene.cycles.samples = self.settings.samples
     
-        bpy.ops.object.bake(type=bake_type, use_selected_to_active=selected_to_active)
+        bpy.ops.object.bake(type=bake_type, use_selected_to_active=False)
 
         for o in org_selected_objects:
             select_set(o, True)
 
         bpy.context.scene.cycles.samples = org_samples
 
+    def bake_selected_to_active(self, bake_type):
+        org_samples = bpy.context.scene.cycles.samples
+        bpy.context.scene.cycles.samples = self.settings.samples
+        bpy.ops.object.bake(type=bake_type, use_selected_to_active=True)
+        bpy.context.scene.cycles.samples = org_samples
+
 
     def execute(self, context):
+        
+        # 2.79
+        if bpy.app.version_string.startswith('2.7'):
+            self.prefs = context.user_preferences.addons[__package__].preferences
+        # 2.80
+        else:
+            self.prefs = context.preferences.addons[__package__].preferences
+
         self.settings = context.scene.principled_baker_settings
         self.render_settings = context.scene.render.bake
         self.active_object = context.active_object
@@ -897,6 +969,11 @@ class PBAKER_OT_bake(bpy.types.Operator):
 
         new_images = {}
 
+        # file needs to be saved
+        if bpy.data.is_saved == False and self.settings.file_path.startswith("//"):
+            self.report({'ERROR'}, 'Blendfile needs to be saved to get relative output path')
+            return {'CANCELLED'}
+
         # bake only works in cycles (for now)
         if not bpy.context.scene.render.engine == 'CYCLES':
             self.report({'ERROR'}, 'Error: Current render engine ({0}) does not support baking'.format(bpy.context.scene.render.engine))
@@ -906,14 +983,19 @@ class PBAKER_OT_bake(bpy.types.Operator):
         if not self.active_object.type == 'MESH':
             self.report({'ERROR'}, '{0} is not a mesh object'.format(self.active_object.name))
             return {'CANCELLED'}
-        if self.render_settings.use_selected_to_active:
+        # if self.render_settings.use_selected_to_active:
+        if self.settings.bake_mode == 'SELECTED_TO_ACTIVE':
             if len(self.selected_objects) < 2:
                 self.report({'ERROR'}, 'Select at least 2 objects!')
                 return {'CANCELLED'}
         
         joblist = []
         if not self.settings.use_autodetect:
-            joblist = self.get_joblist_manual()        
+            joblist = self.get_joblist_manual()
+
+        if self.settings.use_material_id:
+            joblist.append("MatID")
+
 
         # Auto Smooth - See clean up!
         if not self.settings.auto_smooth == 'OBJECT':
@@ -929,9 +1011,175 @@ class PBAKER_OT_bake(bpy.types.Operator):
 
 
         ########
-        # bake single or batch:
+        # bake Combined:
         ########
-        if not self.render_settings.use_selected_to_active:
+        # if not self.render_settings.use_selected_to_active:
+        if self.settings.bake_mode == 'COMBINED':
+
+            bake_objects = self.selected_objects
+
+            for obj in bake_objects:
+                if obj.type == 'MESH':
+                    if obj.hide_render:
+                        self.report({'INFO'}, "baking cancelled. '{0}' not enabled for rendering.".format(obj.name))
+                        return {'CANCELLED'}
+                    if not self.has_material(obj):
+                        self.report({'INFO'}, "baking cancelled. '{0}' Material or Material Output missing.".format(obj.name))
+                        return {'CANCELLED'}
+                    if self.settings.auto_uv_project == 'OFF':
+                        if len(obj.data.uv_layers) == 0:
+                            self.report({'INFO'}, "baking cancelled. '{0}' UV map missing.".format(obj.name))
+                            return {'CANCELLED'}
+
+            # 2.79 - disable Auto Smart UV Project for 2.79
+            if bpy.app.version_string.startswith('2.7'):
+                self.settings.auto_uv_project = 'OFF'
+
+            if self.settings.auto_uv_project == 'SMART':
+                self.smart_project()
+            elif self.settings.auto_uv_project == 'LIGHTMAP':
+                self.lightmap_pack()
+
+
+            bpy.context.window_manager.progress_begin(0, len(bake_objects))
+            progress = 0
+
+            active_outputs = []
+
+            for obj in bake_objects:
+                
+                new_images.clear()
+                
+                # find active material outpus for later clean up
+                for mat_slot in obj.material_slots:
+                    if mat_slot.material:
+                        if not MATERIAL_TAG in mat_slot.material.keys():
+                            active_outputs.append( find_active_output(mat_slot.material) )
+
+
+                # populate joblist                
+                if self.settings.use_autodetect:
+                    joblist = list(set(joblist).union(set(self.get_joblist_from_object(obj))))
+                if self.settings.use_vertex_color:
+                    if len(obj.data.vertex_colors) >= 1:
+                        if "Vertex_Color" not in joblist:
+                            joblist.append("Vertex_Color")
+                    else:
+                        self.report({'INFO'}, "Vertex Color baking skipped. '{0}' has no Vertex Color".format(obj.name))
+
+            obj = self.active_object
+
+            # create new material
+            if self.settings.use_new_material:
+                new_mat_name = obj.name if self.settings.new_material_prefix == "" else self.settings.new_material_prefix
+                new_mat = self.new_material(new_mat_name)
+                obj.data.materials.append(new_mat)
+
+            # go through joblist
+            for job_name in joblist:
+
+                # guess colors for Transparent, Translucent, Glass, Emission
+                if self.settings.use_new_material:
+                    if job_name in self.new_node_colors.keys():
+                        self.guess_colors(obj, job_name)
+
+                # skip, if no overwrite and image exists
+                image_file_name = self.get_image_file_name(obj.name, job_name)
+                if not self.settings.use_overwrite and self.is_image_file(image_file_name):
+                    self.report({'INFO'}, "baking skipped for '{0}'. File exists.".format(self.get_image_file_name(obj.name, job_name)))
+
+                    # load image for new material
+                    if self.settings.use_new_material:
+                        if image_file_name in bpy.data.images:
+                            image = bpy.data.images[image_file_name]
+                        else:
+                            path = self.get_image_file_path(image_file_name)
+                            image = bpy.data.images.load(path)
+                            new_images[job_name] = image
+                
+                else:  # do bake
+
+                    remove_empty_material_slots(obj)
+
+                    # image to bake on
+                    image = self.new_bake_image(obj.name, job_name)
+
+                    # append image to image dict for new material
+                    new_images[job_name] = image
+
+
+                    materials = []
+                    for o in bake_objects:
+                        for mat_slot in o.material_slots:
+                            mat = mat_slot.material
+                            if not MATERIAL_TAG in mat.keys() and mat not in materials:
+                                materials.append(mat)
+                    
+                    for mat in materials:
+                        # 2.79 Normal Map
+                        if bpy.app.version_string.startswith('2.7') and job_name == "Normal":
+                            self.prepare_object_for_bake(obj, job_name)
+                        # 2.80
+                        if not job_name in ["Emission", "Normal"]:
+                            self.prepare_object_for_bake(obj, job_name)
+                        self.create_bake_image_node(mat, image)
+
+                    # bake!
+                    self.report({'INFO'}, "baking '{0}'".format(image.name))
+                    bake_type = self.get_bake_type(job_name)
+                    # self.bake(obj, bake_type=bake_type, selected_to_active=False)
+                    self.bake(bake_type)
+
+                    # save!
+                    save_image_as(image,
+                        file_path=image.filepath,
+                        file_format=self.settings.file_format, 
+                        color_mode=self.settings.color_mode, 
+                        color_depth=self.settings.color_depth)
+
+                    # glossiness
+                    if job_name == "Roughness" and self.settings.use_invert_roughness:
+                        self.create_gloss_image(obj.name, image)
+
+                    
+                    for o in bake_objects:
+                        # clean up: delete all nodes with tag = NODE_TAG
+                        self.delete_tagged_nodes(o, NODE_TAG)
+                        if self.settings.use_new_material:
+                            for node in new_mat.node_tree.nodes:
+                                if NODE_TAG in node.keys():
+                                    new_mat.node_tree.nodes.remove(node)
+
+                        # clean up: reactivate Material Outputs
+                        for mat_slot in o.material_slots:
+                            for node in mat_slot.material.node_tree.nodes:
+                                if node.type == "OUTPUT_MATERIAL":
+                                    node.is_active_output = False
+                        for mat_output in active_outputs:
+                            mat_output.is_active_output = True
+
+
+                    progress += 1/len(joblist)
+                    bpy.context.window_manager.progress_update(progress)
+
+                # add alpha channel to color
+                if self.settings.use_alpha_to_color and self.settings.color_mode == 'RGBA':
+                    if "Color" in new_images.keys() and "Alpha" in new_images.keys():
+                        new_images["Color"].pixels = get_combined_images(new_images["Color"], new_images["Alpha"], 0, 3)
+                        new_images["Color"].save()
+            # jobs DONE
+
+            # add new images to new material
+            if self.settings.use_new_material:
+                self.add_images_to_material(new_mat, new_images)
+
+            bpy.context.window_manager.progress_end()
+
+        ########
+        # bake Batch:
+        ########
+        # if not self.render_settings.use_selected_to_active:
+        if self.settings.bake_mode == 'BATCH':
 
             bake_objects = []
             for obj in self.selected_objects:
@@ -946,8 +1194,8 @@ class PBAKER_OT_bake(bpy.types.Operator):
                                 self.report({'INFO'}, "baking skipped for '{0}'. Material or Material Output missing.".format(obj.name))
                         else:
                             if self.has_material(obj):
-                                if self.settings.use_smart_uv_project:
-                                    self.smart_uv_project(obj)
+                                if not self.settings.auto_uv_project == 'OFF':
+                                    self.auto_uv_project(obj)
                                     bake_objects.append(obj)
                                 else:
                                     self.report({'INFO'}, "baking skipped for '{0}'. UV map missing.".format(obj.name))
@@ -957,12 +1205,19 @@ class PBAKER_OT_bake(bpy.types.Operator):
             bpy.context.window_manager.progress_begin(0, len(bake_objects))
             progress = 0
 
+            active_outputs = []
+
             for obj in bake_objects:
                 
                 new_images.clear()
                 
                 # find active material outpus for later clean up
-                active_outputs = self.get_active_outputs(obj)
+                # active_outputs = self.get_active_outputs(obj)
+                for mat_slot in obj.material_slots:
+                    if mat_slot.material:
+                        if not MATERIAL_TAG in mat_slot.material.keys():
+                            active_outputs.append( find_active_output(mat_slot.material) )
+
 
                 # populate joblist
                 if self.settings.use_autodetect:
@@ -1002,8 +1257,6 @@ class PBAKER_OT_bake(bpy.types.Operator):
                                 image = bpy.data.images.load(path)
                                 new_images[job_name] = image
                     
-                    # skip vertex color, if no
-
                     else:  # do bake
 
                         remove_empty_material_slots(obj)
@@ -1031,7 +1284,8 @@ class PBAKER_OT_bake(bpy.types.Operator):
                         # bake!
                         self.report({'INFO'}, "baking '{0}'".format(image.name))
                         bake_type = self.get_bake_type(job_name)
-                        self.bake(obj, bake_type=bake_type, selected_to_active=False)
+                        # self.bake(obj, bake_type=bake_type, selected_to_active=False)
+                        self.bake_single(obj, bake_type)
 
                         # save!
                         save_image_as(image,
@@ -1063,6 +1317,7 @@ class PBAKER_OT_bake(bpy.types.Operator):
 
                         progress += 1/len(joblist)
                         bpy.context.window_manager.progress_update(progress)
+                # jobs DONE
 
                 # add alpha channel to color
                 if self.settings.use_alpha_to_color and self.settings.color_mode == 'RGBA':
@@ -1077,9 +1332,10 @@ class PBAKER_OT_bake(bpy.types.Operator):
             bpy.context.window_manager.progress_end()
 
         ########
-        # bake selected to active:
+        # bake Selected to Active:
         ########
-        elif self.render_settings.use_selected_to_active:
+        # elif self.render_settings.use_selected_to_active:
+        elif self.settings.bake_mode == 'SELECTED_TO_ACTIVE':
             new_images.clear()
 
             if self.active_object.hide_render:
@@ -1103,10 +1359,8 @@ class PBAKER_OT_bake(bpy.types.Operator):
             # populate joblist
             for obj in bake_objects:
                 if self.settings.use_autodetect:
-                    job_extend = self.get_joblist_from_object(obj)
-                    for j in job_extend:
-                        if j not in joblist:
-                            joblist.append(j)
+                    joblist = list(set(joblist).union(set(self.get_joblist_from_object(obj))))
+
             if self.settings.use_vertex_color:
                 if len(obj.data.vertex_colors) >= 1:
                     if "Vertex_Color" not in joblist:
@@ -1123,8 +1377,10 @@ class PBAKER_OT_bake(bpy.types.Operator):
             self.active_object.data.materials.append(new_mat)
 
             # auto smart uv project
-            if len(self.active_object.data.uv_layers) < 1:
-                self.smart_uv_project(self.active_object)
+            if not self.settings.auto_uv_project == 'OFF':
+                self.auto_uv_project(self.active_object)
+
+
 
             bpy.context.window_manager.progress_begin(0, len(joblist))
             progress = 0
@@ -1180,8 +1436,8 @@ class PBAKER_OT_bake(bpy.types.Operator):
                     # bake!
                     self.report({'INFO'}, "baking '{0}'".format(image.name))
                     bake_type = self.get_bake_type(job_name)
-                    # self.bake(type=bake_type, use_selected_to_active=True)
-                    bpy.ops.object.bake(type=bake_type, use_selected_to_active=True)
+                    # bpy.ops.object.bake(type=bake_type, use_selected_to_active=True)
+                    self.bake_selected_to_active(bake_type)
 
 
                     # save!
@@ -1213,6 +1469,7 @@ class PBAKER_OT_bake(bpy.types.Operator):
 
                     progress+=1
                     bpy.context.window_manager.progress_update(progress)
+            # jobs DONE
             
             # clean up!
             for mat_slot in self.active_object.material_slots:
