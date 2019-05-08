@@ -40,11 +40,11 @@ If a Normal Map and a Bump Map is baked, the Bump node will not be linked in new
 
 - new Ambient Occlusion texture is not connected in newly generated material
 
-- Vertex Color baking only works, if the object has a material (will be fixed)
-
-- Auto Smart UV Project not available in Blender 2.79 for multiple objects (bake mode: Combined)
+- Auto UV unwrap not available in Blender 2.79 for multiple objects (bake mode: Combined)
 
 - with Material Name to define the Material ID Colors: Duplicate colors are possible!
+
+- Baking "in" Eevee did crash Blender 2.80 beta sometimes! I had no crashes with the recent builds while testing.
 
 - known issues:
   * results for Subsurface Radius is not useful 
