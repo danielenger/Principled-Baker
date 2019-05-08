@@ -17,10 +17,17 @@ class PBAKER_PT_panel(bpy.types.Panel):
         settings = context.scene.principled_baker_settings
         render_settings = context.scene.render.bake
 
-        if bpy.context.scene.render.engine == 'CYCLES':
+        # 2.79
+        if bpy.app.version_string.startswith('2.7'):
+            prefs = context.user_preferences.addons[__package__].preferences
+        # 2.80
+        else:
+            prefs = context.preferences.addons[__package__].preferences
+
+        if bpy.context.scene.render.engine == 'CYCLES' or prefs.switch_to_cycles:
             self.layout.operator('object.principled_baker_bake', text='Bake', icon='RENDER_STILL')
         else:
-            self.layout.label(text="Set Render engine to Cycles! {} is not supported (yet).".format(bpy.context.scene.render.engine), icon='ERROR')
+            self.layout.label(text="Set Render engine to Cycles! {} is not supported.".format(bpy.context.scene.render.engine), icon='ERROR')
 
 
         col = self.layout.box().column(align=True)
@@ -94,7 +101,8 @@ class PBAKER_PT_panel(bpy.types.Panel):
 
         # new material:
         col = self.layout.box().column(align=True)
-        col.prop(settings, "use_new_material")
+        col.prop(settings, "make_new_material")
+        col.prop(settings, "add_new_material")
         col.prop(settings, "new_material_prefix")
 
         # autodetect

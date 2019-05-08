@@ -252,9 +252,14 @@ class PBAKER_settings(bpy.types.PropertyGroup):
     )
 
 
-    use_new_material : BoolProperty(
+    make_new_material : BoolProperty(
+        name="Create New Material",
+        description="Create new materials",
+        default=False
+    )
+    add_new_material : BoolProperty(
         name="Add New Material",
-        description="Add new material to selected objects with a Principled BSDF.\nIf Selected to Active is active, a new material will be added to active object",
+        description="Add new material to selected objects.\nIf Selected to Active is active, a new material will be added to active object",
         default=False
     )
 

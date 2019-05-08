@@ -11,6 +11,10 @@ from bpy.props import (StringProperty,
 class PBAKER_prefs(bpy.types.AddonPreferences):
     bl_idname = __package__
 
+    switch_to_cycles : BoolProperty(
+        name="Bake in Eevee/Workbench (temporarily switch to Cycles)",
+        default=False
+    )
 
     mat_id_algorithm : EnumProperty(
         name="Material ID Colors by",
@@ -39,6 +43,13 @@ class PBAKER_prefs(bpy.types.AddonPreferences):
     def draw(self, context):
         layout = self.layout
         col = layout.column()
+
+        # 2.80
+        if bpy.app.version_string.startswith('2.8'):
+            col.prop(self, "switch_to_cycles")
+            col.label(text="This may crash Blender 2.80 beta!", icon='ERROR')
+            col.separator()
+
         col.prop(self, "mat_id_algorithm")
         if self.mat_id_algorithm == 'HUE':
             col.prop(self, "mat_id_saturation")
