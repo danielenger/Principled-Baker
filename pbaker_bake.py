@@ -439,12 +439,11 @@ class PBAKER_OT_bake(bpy.types.Operator):
         return os.path.join(path, image_file_name)
 
     def load_image(self, image_file_name):
-        if self.settings.make_new_material:
-            if image_file_name in bpy.data.images:
-                image = bpy.data.images[image_file_name]
-            else:
-                path = self.get_image_file_path(image_file_name)
-                image = bpy.data.images.load(path)
+        if image_file_name in bpy.data.images:
+            image = bpy.data.images[image_file_name]
+        else:
+            path = self.get_image_file_path(image_file_name)
+            image = bpy.data.images.load(path)
         return image
 
     def new_bake_image(self, object_name, job_name):
