@@ -494,6 +494,8 @@ def has_material(obj):
 def get_bake_type(job_name):
     if job_name in NORMAL_INPUTS:
         return 'NORMAL'
+    if job_name in ['Diffuse']:
+        return 'DIFFUSE'
     else:
         return 'EMIT'
 

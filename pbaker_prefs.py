@@ -1,5 +1,6 @@
 import bpy
 
+from addon_utils import check
 from bpy.props import (StringProperty, 
     BoolProperty,
     FloatProperty,
@@ -39,6 +40,11 @@ class PBAKER_prefs(bpy.types.AddonPreferences):
         max=1.0
     )
 
+    # use_node_wrangler : BoolProperty(
+    #     name="Node Wrangler for Texture Setup",
+    #     default=False
+    # )
+
 
     def draw(self, context):
         layout = self.layout
@@ -56,3 +62,7 @@ class PBAKER_prefs(bpy.types.AddonPreferences):
             col.prop(self, "mat_id_value")
         elif self.mat_id_algorithm == 'NAME':
             self.layout.label(text="Duplicate colors are possible!", icon='ERROR')
+
+        # # Node Wrangler for Texture Setup
+        # if check("node_wrangler"):
+        #     col.prop(self, "use_node_wrangler")

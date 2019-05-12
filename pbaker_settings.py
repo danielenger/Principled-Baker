@@ -210,6 +210,11 @@ class PBAKER_settings(bpy.types.PropertyGroup):
         default="_MatID",
         maxlen=1024,
     )
+    suffix_diffuse : StringProperty(
+        name="Diffuse",
+        default="_diffuse",
+        maxlen=1024,
+    )
 
     image_prefix : StringProperty(
         name="Prefix (Texture Name)",
@@ -423,3 +428,10 @@ class PBAKER_settings(bpy.types.PropertyGroup):
     use_Tangent : BoolProperty(name="Tangent", default=False)
     use_Transmission : BoolProperty(name="Transmission", default=False)
     use_Transmission_Roughness : BoolProperty(name="Transmission Roughness", default = False)
+
+    # Diffuse
+    use_Diffuse : BoolProperty(
+        name="Diffuse", 
+        description='Does only work in "Combined" and "Single/Batch"',
+        default = False)
+

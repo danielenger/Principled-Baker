@@ -401,7 +401,7 @@ class PBAKER_OT_bake(bpy.types.Operator):
                                         mix_node.inputs['Color2'])
 
             # skip some
-            elif name in ["AO", "Vertex_Color", "MatID"]:
+            elif name in ["AO", "Vertex_Color", "MatID", "Diffuse"]:
                 pass
 
             else:
@@ -760,7 +760,25 @@ class PBAKER_OT_bake(bpy.types.Operator):
     def bake(self, bake_type, selected_to_active=False):
         org_samples = bpy.context.scene.cycles.samples
         bpy.context.scene.cycles.samples = self.settings.samples
-        bpy.ops.object.bake(type=bake_type, use_selected_to_active=selected_to_active)
+        
+        pass_filter = []
+        if self.settings.use_Diffuse:
+            if self.render_settings.use_pass_direct:
+                pass_filter.append('DIRECT')
+            if self.render_settings.use_pass_indirect:
+                pass_filter.append('INDIRECT')
+            if self.render_settings.use_pass_color:
+                pass_filter.append('COLOR')
+        pass_filter = set(pass_filter)
+
+        bpy.ops.object.bake(
+            type=bake_type, 
+            pass_filter=pass_filter, 
+            use_selected_to_active=selected_to_active,
+            normal_space=self.render_settings.normal_space,
+            normal_r=self.render_settings.normal_r, 
+            normal_g=self.render_settings.normal_g, 
+            normal_b=self.render_settings.normal_b, )
         bpy.context.scene.cycles.samples = org_samples
 
     def bake_single(self, obj, bake_type):
@@ -895,6 +913,10 @@ class PBAKER_OT_bake(bpy.types.Operator):
                 else:
                     joblist = self.get_joblist_manual()
 
+                if self.settings.use_Diffuse:
+                    if "Diffuse" not in joblist:
+                        joblist.append("Diffuse")
+
                 if self.settings.use_material_id:
                     if "MatID" not in joblist:
                         joblist.append("MatID")
@@ -962,6 +984,8 @@ class PBAKER_OT_bake(bpy.types.Operator):
                         self.prepare_objects_for_bake_matid(obj_list)
                     elif job_name == 'Vertex_Color':
                         self.prepare_objects_for_bake_vertex_color(obj_list)
+                    elif job_name == 'Diffuse':
+                        pass  # prepare nothing
                     else:
                         self.prepare_objects_for_bake(obj_list, job_name)
 
@@ -1041,6 +1065,10 @@ class PBAKER_OT_bake(bpy.types.Operator):
                 if self.settings.use_autodetect:
                     joblist = list(set(joblist).union(set(self.get_joblist_from_object(obj))))
 
+            if self.settings.use_Diffuse:
+                if "Diffuse" not in joblist:
+                    joblist.append("Diffuse")
+
             if self.settings.use_material_id:
                 if "MatID" not in joblist:
                     joblist.append("MatID")
@@ -1109,6 +1137,8 @@ class PBAKER_OT_bake(bpy.types.Operator):
                     self.prepare_objects_for_bake_matid(bake_objects)
                 elif job_name == 'Vertex_Color':
                     self.prepare_objects_for_bake_vertex_color(bake_objects)
+                elif job_name == 'Diffuse':
+                    pass  # prepare nothing
                 else:
                     self.prepare_objects_for_bake(bake_objects, job_name)
 
@@ -1194,6 +1224,10 @@ class PBAKER_OT_bake(bpy.types.Operator):
                 if self.settings.use_autodetect:
                     joblist = list(set(joblist).union(set(self.get_joblist_from_object(obj))))
 
+            # if self.settings.use_Diffuse: # TODO does not work properly
+            #     if "Diffuse" not in joblist:
+            #         joblist.append("Diffuse")
+
             if self.settings.use_material_id:
                 if "MatID" not in joblist:
                     joblist.append("MatID")
@@ -1259,6 +1293,8 @@ class PBAKER_OT_bake(bpy.types.Operator):
                     self.prepare_objects_for_bake_matid(bake_objects)
                 elif job_name == 'Vertex_Color':
                     self.prepare_objects_for_bake_vertex_color(bake_objects)
+                elif job_name == 'Diffuse':
+                    pass  # prepare nothing
                 else:
                     self.prepare_objects_for_bake(bake_objects, job_name)
 

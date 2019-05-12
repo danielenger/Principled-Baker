@@ -59,9 +59,10 @@ class PBAKER_PT_panel(bpy.types.Panel):
 
         # bake/render options:
         col = self.layout.box().column(align=True)
-        col.label(text="Selected to Active:")
         col.prop(render_settings, "margin")
 
+        col.separator()
+        col.label(text="Selected to Active:")
         sub = col.column()
         sub.prop(render_settings, "use_cage", text="Cage")
         if render_settings.use_cage:
@@ -96,6 +97,7 @@ class PBAKER_PT_panel(bpy.types.Panel):
             col.prop(settings, "suffix_displacement")
             col.prop(settings, "suffix_vertex_color")
             col.prop(settings, "suffix_material_id")
+            col.prop(settings, "suffix_diffuse")
             row = col.row()
             row.prop(settings, 'suffix_text_mod', expand=True)
 
@@ -144,12 +146,24 @@ class PBAKER_PT_panel(bpy.types.Panel):
             col.prop(settings, "use_Clearcoat_Normal", toggle=True)
             col.prop(settings, "use_Tangent", toggle=True)
         
+        # Diffuse
+        col.prop(settings, "use_Diffuse")
+        if settings.use_Diffuse:
+            row = col.row(align=True)
+            row.prop(render_settings, "use_pass_direct", text="Direct", toggle=True)
+            row.prop(render_settings, "use_pass_indirect", text="Indirect", toggle=True)
+            row.prop(render_settings, "use_pass_color", text="Color", toggle=True)
+
         col.prop(settings, "use_invert_roughness")
         col.prop(settings, "use_Bump")
         col.prop(settings, "use_vertex_color")
         col.prop(settings, "use_material_id")
 
-        # settings:
+        col = self.layout.box().column(align=True)
+        col.prop(settings, "use_exclude_transparent_colors")
+
+
+        # Auto Smooth
         col = self.layout.box().column(align=True)
         col.label(text="Auto Smooth:")
         row = col.row()
@@ -158,10 +172,7 @@ class PBAKER_PT_panel(bpy.types.Panel):
         if settings.color_mode == 'RGBA':
             col.prop(settings, "use_alpha_to_color")
         
-        col = self.layout.box().column(align=True)
-        col.prop(settings, "use_exclude_transparent_colors")
-
-
+        # Auto UV unwrap
         if bpy.app.version_string.startswith('2.7') and settings.bake_mode == 'COMBINED':
             self.layout.label(text="Auto UV unwrap not available in Blender 2.79 for multiple objects.", icon='INFO')
         else:                
