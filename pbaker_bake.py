@@ -204,8 +204,10 @@ class PBAKER_OT_bake(bpy.types.Operator):
                 mat = mat_slot.material
                 if not MATERIAL_TAG in mat.keys():
                     mat_out = get_active_output(mat_slot.material)
-                    if job_name == "Emission":
+                    if job_name == 'Emission':
                         node_types = 'EMISSION'
+                    elif job_name == 'Alpha':
+                        node_types = 'BSDF_TRANSPARENT'
                     else:
                         node_types = ALPHA_NODES[job_name]
                     color_list = self.get_value_list_from_node_types(mat_out, 'Color', node_types)
@@ -214,7 +216,9 @@ class PBAKER_OT_bake(bpy.types.Operator):
 
     def create_bake_image_node(self, mat, image):
         bake_image_node = new_image_node(mat)
-        bake_image_node.color_space = 'COLOR' if image.colorspace_settings.name == 'sRGB' else 'NONE'
+        # 2.79
+        if bpy.app.version_string.startswith('2.7'):
+            bake_image_node.color_space = 'COLOR' if image.colorspace_settings.name == 'sRGB' else 'NONE'
         bake_image_node.image = image  # add image to node
         bake_image_node[NODE_TAG] = 1  # tag for clean up
         # make only bake_image_node active
@@ -266,7 +270,9 @@ class PBAKER_OT_bake(bpy.types.Operator):
                 image_node = new_image_node(new_mat)
                 image_node.label = name
 
-                image_node.color_space = 'COLOR' if name in SRGB_INPUTS else 'NONE'
+                # 2.79
+                if bpy.app.version_string.startswith('2.7'):
+                    image_node.color_space = 'COLOR' if name in SRGB_INPUTS else 'NONE'
 
                 image_node.image = image
 
@@ -332,6 +338,12 @@ class PBAKER_OT_bake(bpy.types.Operator):
                     mid_offset_y = alpha_node.location.y
                     mixshader_node.location = (sib.location.x + NODE_OFFSET_X, mid_offset_y)
                     
+                    # 2.80
+                    if bpy.app.version_string.startswith('2.8'):
+                        if name == "Alpha":
+                            new_mat.node_tree.links.new(image_node.outputs['Color'],
+                                                        principled_node.inputs['Alpha'])
+                    
             elif name == 'Emission':
                 emission_node = new_mat.node_tree.nodes.new(type='ShaderNodeEmission')
                 emission_node.inputs['Color'].default_value = self.new_node_colors[name]
@@ -380,7 +392,9 @@ class PBAKER_OT_bake(bpy.types.Operator):
                 if 'AO' in new_images.keys():
                     ao_image_node = new_image_node(new_mat)
                     ao_image_node.label = 'Ambient Occlusion'
-                    ao_image_node.color_space = 'NONE'
+                    # 2.79
+                    if bpy.app.version_string.startswith('2.7'):
+                        ao_image_node.color_space = 'NONE'
                     ao_image_node.image = new_images['AO']
                     ao_image_node.width = IMAGE_NODE_WIDTH
                     ao_image_node.location.x = principled_node.location.x + IMAGE_NODE_OFFSET_X
@@ -647,8 +661,18 @@ class PBAKER_OT_bake(bpy.types.Operator):
 
         if bake_type == 'EMIT':
             if job_name in ALPHA_NODES.keys():
-                node_type = ALPHA_NODES[job_name]
-                prepare_bake_factor(mat, socket_to_surface, socket_to_pb_emission_node_color, node_type, 'Fac')
+                prepare_bake_factor(mat, socket_to_surface, socket_to_pb_emission_node_color, ALPHA_NODES[job_name], 'Fac')
+
+            elif job_name == 'Alpha':
+                # 2.79
+                if bpy.app.version_string.startswith('2.7'):
+                    prepare_bake_factor(mat, socket_to_surface, socket_to_pb_emission_node_color, 'BSDF_TRANSPARENT', 'Fac')
+                # 2.80
+                else:
+                    if is_node_type_in_node_tree(material_output, 'BSDF_TRANSPARENT'):
+                        prepare_bake_factor(mat, socket_to_surface, socket_to_pb_emission_node_color, 'BSDF_TRANSPARENT', 'Fac')
+                    else:
+                        prepare_bake(mat, socket_to_surface, socket_to_pb_emission_node_color, 'Alpha')
 
             elif job_name == 'Displacement':
                 if material_output.inputs['Displacement'].is_linked:

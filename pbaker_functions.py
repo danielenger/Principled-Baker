@@ -29,16 +29,23 @@ NODE_INPUTS = [
     'Clearcoat Normal',
     'Tangent'
 ]
+# 2.80
+if bpy.app.version_string.startswith('2.8'):
+    NODE_INPUTS.extend(['Emission', 'Alpha'])
 
 NORMAL_INPUTS = ['Normal', 'Clearcoat Normal', 'Tangent']
 
 SRGB_INPUTS = ['Color', 'Base Color']
 
 ALPHA_NODES = {
-    "Alpha":'BSDF_TRANSPARENT',
+    # "Alpha":'BSDF_TRANSPARENT',
     "Translucent_Alpha":'BSDF_TRANSLUCENT',
     "Glass_Alpha":'BSDF_GLASS'
 }
+# 2.79
+if bpy.app.version_string.startswith('2.7'):
+    ALPHA_NODES["Alpha"] = 'BSDF_TRANSPARENT'
+
 
 BSDF_NODES = [
     'BSDF_PRINCIPLED',
