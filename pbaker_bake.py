@@ -541,10 +541,12 @@ class PBAKER_OT_bake(bpy.types.Operator):
         image = bpy.data.images.new(
             name=name, width=res, height=res, alpha=alpha, float_buffer=is_float)
 
-        image.colorspace_settings.name = 'sRGB' if job_name == 'Color' else 'Non-Color'
+        image.colorspace_settings.name = 'sRGB' if job_name in ['Color', 'Diffuse'] else 'Non-Color'
         image.generated_color = color
         image.generated_type = 'BLANK'
-        image.use_alpha = alpha
+        # 2.79
+        if bpy.app.version_string.startswith('2.7'):
+            image.use_alpha = alpha
         image.filepath = path
 
         return image
