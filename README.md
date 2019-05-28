@@ -60,4 +60,4 @@ If a Normal Map and a Bump Map is baked, the Bump node will not be linked in new
 
 ***
 Thread on blenderartists:
-https://blenderartists.org/t/principled-baker-bake-pbr-textures-from-principled-bsdf/1102187
+https://blenderartists.org/t/addon-principled-baker/1102187
