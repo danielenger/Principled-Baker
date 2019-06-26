@@ -1,5 +1,5 @@
 # Principled-Baker
-bake all inputs of Principled BSDFs (and other nodes) to image textures
+A Blender Add-on: Bake PBR textures with a few clicks
 ---
 
 [Principled Baker for Blender 2.79](https://github.com/danielenger/Principled-Baker_for_2-79)
@@ -7,19 +7,24 @@ bake all inputs of Principled BSDFs (and other nodes) to image textures
 
 Features:
 --
-- Autodetection of what needs to be baked
+- Autodetection of what needs to be baked by connected inputs
 - Manual selection for texture channels
+- bake almost all Principled BSDF (and more) inputs (Color, Metallic, Roughness, etc.) to image textures
+- Autodetection/Manual selection also for Alpha, Emission, Ambient Occlusion (from node; 2.80 only), Diffuse, Glossiness (invert Roughness), Bump (as hightmap), Vertex Color, Material ID
 - 3 Bake Modes:
   - Combined (new default): Bake a single selected object or bake multiple selected objects with shared UV maps. This is like Blenders default bake.
   - Single/Batch (previous default): Bake every selected object separately.
   - Selected to Active: Does what it says.
+- Create new material with new image texture nodes (most image nodes connected)
+- Auto Smooth from object/on/off
+- Auto UV unwrap option: Smart UV Project/Lightmap Pack
 
 ---
 Limitations/Warnings:
 --
 - **Be careful with Overwrite! It does what it says!**
 
-- Baking works in Cycles only. (for now)
+- Baking works in Cycles only. (see preferences Bake "in" Eevee)
 
 - Displacement works only with a Displacement node. (Blender 2.80)
 Vector Displacement does not work.
@@ -55,4 +60,4 @@ If a Normal Map and a Bump Map is baked, the Bump node will not be linked in new
 
 ***
 Thread on blenderartists:
-https://blenderartists.org/t/principled-baker-bake-pbr-textures-from-principled-bsdf/1102187
+https://blenderartists.org/t/addon-principled-baker/1102187
