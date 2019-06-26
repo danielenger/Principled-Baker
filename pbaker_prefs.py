@@ -1,23 +1,23 @@
 import bpy
 
 from addon_utils import check
-from bpy.props import (StringProperty, 
-    BoolProperty,
-    FloatProperty,
-    EnumProperty
-    )
+from bpy.props import (StringProperty,
+                       BoolProperty,
+                       FloatProperty,
+                       EnumProperty
+                       )
 
 
 # Addon prefs
 class PBAKER_prefs(bpy.types.AddonPreferences):
     bl_idname = __package__
 
-    switch_to_cycles : BoolProperty(
+    switch_to_cycles: BoolProperty(
         name="Bake in Eevee/Workbench (temporarily switch to Cycles)",
         default=False
     )
 
-    mat_id_algorithm : EnumProperty(
+    mat_id_algorithm: EnumProperty(
         name="Material ID Colors by",
         items=(
             ('HUE', 'Slot/Hue', ''),
@@ -26,14 +26,14 @@ class PBAKER_prefs(bpy.types.AddonPreferences):
         default='HUE'
     )
 
-    mat_id_saturation : FloatProperty(
+    mat_id_saturation: FloatProperty(
         name="Saturation",
         default=1.0,
         min=0.0,
         max=1.0
     )
 
-    mat_id_value : FloatProperty(
+    mat_id_value: FloatProperty(
         name="Value",
         default=1.0,
         min=0.0,
@@ -44,7 +44,6 @@ class PBAKER_prefs(bpy.types.AddonPreferences):
     #     name="Node Wrangler for Texture Setup",
     #     default=False
     # )
-
 
     def draw(self, context):
         layout = self.layout
@@ -61,7 +60,8 @@ class PBAKER_prefs(bpy.types.AddonPreferences):
             col.prop(self, "mat_id_saturation")
             col.prop(self, "mat_id_value")
         elif self.mat_id_algorithm == 'NAME':
-            self.layout.label(text="Duplicate colors are possible!", icon='ERROR')
+            self.layout.label(
+                text="Duplicate colors are possible!", icon='ERROR')
 
         # # Node Wrangler for Texture Setup
         # if check("node_wrangler"):

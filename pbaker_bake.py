@@ -1,11 +1,12 @@
-import bpy
+import hashlib
 import os
 import pathlib
 import time
-from mathutils import Color
-import hashlib
 
-from . pbaker_functions import *
+import bpy
+from mathutils import Color
+
+from .pbaker_functions import *
 
 
 class PBAKER_OT_bake(bpy.types.Operator):
@@ -14,7 +15,6 @@ class PBAKER_OT_bake(bpy.types.Operator):
     bl_description = "bake all inputs of a Principled BSDF to image textures"
     bl_options = {'REGISTER', 'UNDO'}
 
-    settings = None
 
     def get_joblist_manual(self):
         joblist = []
@@ -120,7 +120,7 @@ class PBAKER_OT_bake(bpy.types.Operator):
                     socket_name = 'Displacement'
                     if is_socket_linked_in_node_tree(material_output, socket_name):
                         # 2.79
-                        if bpy.app.version_string.startswith('2.7'):
+                        if is_2_79:
                             if not socket_name in joblist:
                                 joblist.append(socket_name)
                         # 2.80
@@ -219,7 +219,7 @@ class PBAKER_OT_bake(bpy.types.Operator):
     def create_bake_image_node(self, mat, image):
         bake_image_node = new_image_node(mat)
         # 2.79
-        if bpy.app.version_string.startswith('2.7'):
+        if is_2_79:
             bake_image_node.color_space = 'COLOR' if image.colorspace_settings.name == 'sRGB' else 'NONE'
         bake_image_node.image = image  # add image to node
         bake_image_node[NODE_TAG] = 1  # tag for clean up
@@ -236,7 +236,7 @@ class PBAKER_OT_bake(bpy.types.Operator):
         mat_output.location = (300.0, 300.0)
 
         # 2.79
-        if bpy.app.version_string.startswith('2.7'):
+        if is_2_79:
             mat.node_tree.nodes.remove(mat.node_tree.nodes['Diffuse BSDF'])
             principled_node = mat.node_tree.nodes.new(
                 type='ShaderNodeBsdfPrincipled')
@@ -279,7 +279,7 @@ class PBAKER_OT_bake(bpy.types.Operator):
                 image_node.label = name
 
                 # 2.79
-                if bpy.app.version_string.startswith('2.7'):
+                if is_2_79:
                     image_node.color_space = 'COLOR' if name in SRGB_INPUTS else 'NONE'
 
                 image_node.image = image
@@ -314,7 +314,7 @@ class PBAKER_OT_bake(bpy.types.Operator):
                     bump_node.outputs['Normal'], principled_node.inputs['Normal'])
             elif name == "Displacement":
                 # 2.79
-                if bpy.app.version_string.startswith('2.7'):
+                if is_2_79:
                     new_mat.node_tree.links.new(image_node.outputs['Color'],
                                                 material_output.inputs["Displacement"])
                 # 2.80
@@ -362,7 +362,7 @@ class PBAKER_OT_bake(bpy.types.Operator):
                         sib.location.x + NODE_OFFSET_X, mid_offset_y)
 
                     # 2.80
-                    if bpy.app.version_string.startswith('2.8'):
+                    if is_2_80:
                         if name == "Alpha":
                             new_mat.node_tree.links.new(image_node.outputs['Color'],
                                                         principled_node.inputs['Alpha'])
@@ -427,7 +427,7 @@ class PBAKER_OT_bake(bpy.types.Operator):
                     ao_image_node = new_image_node(new_mat)
                     ao_image_node.label = 'Ambient Occlusion'
                     # 2.79
-                    if bpy.app.version_string.startswith('2.7'):
+                    if is_2_79:
                         ao_image_node.color_space = 'NONE'
                     ao_image_node.image = new_images['AO']
                     ao_image_node.width = IMAGE_NODE_WIDTH
@@ -541,11 +541,12 @@ class PBAKER_OT_bake(bpy.types.Operator):
         image = bpy.data.images.new(
             name=name, width=res, height=res, alpha=alpha, float_buffer=is_float)
 
-        image.colorspace_settings.name = 'sRGB' if job_name in ['Color', 'Diffuse'] else 'Non-Color'
+        image.colorspace_settings.name = 'sRGB' if job_name in [
+            'Color', 'Diffuse'] else 'Non-Color'
         image.generated_color = color
         image.generated_type = 'BLANK'
         # 2.79
-        if bpy.app.version_string.startswith('2.7'):
+        if is_2_79:
             image.use_alpha = alpha
         image.filepath = path
 
@@ -685,7 +686,7 @@ class PBAKER_OT_bake(bpy.types.Operator):
                 if mat_slot.material:
                     mat = mat_slot.material
                     # 2.79 Normal Map
-                    if bpy.app.version_string.startswith('2.7') and job_name == "Normal":
+                    if is_2_79 and job_name == "Normal":
                         self.prepare_material_for_bake(mat, job_name)
                     # 2.80
                     if job_name not in ["Emission", "Normal"]:
@@ -720,7 +721,7 @@ class PBAKER_OT_bake(bpy.types.Operator):
 
             elif job_name == 'Alpha':
                 # 2.79
-                if bpy.app.version_string.startswith('2.7'):
+                if is_2_79:
                     prepare_bake_factor(
                         mat, socket_to_surface, socket_to_pb_emission_node_color, 'BSDF_TRANSPARENT', 'Fac')
                 # 2.80
@@ -736,7 +737,7 @@ class PBAKER_OT_bake(bpy.types.Operator):
                 if material_output.inputs['Displacement'].is_linked:
                     socket_to_displacement = material_output.inputs['Displacement'].links[0].from_socket
                     # 2.79
-                    if bpy.app.version_string.startswith('2.7'):
+                    if is_2_79:
                         from_socket = socket_to_displacement.links[0].from_socket
                         mat.node_tree.links.new(
                             from_socket, socket_to_pb_emission_node_color)
@@ -760,7 +761,7 @@ class PBAKER_OT_bake(bpy.types.Operator):
                 pb_emission_node.outputs[0], pb_output_node.inputs['Surface'])
 
         # 2.79
-        elif bake_type == 'NORMAL' and bpy.app.version_string.startswith('2.7'):
+        elif bake_type == 'NORMAL' and is_2_79:
             if self.settings.use_Bump:
                 prepare_bake(mat, socket_to_surface,
                              socket_to_pb_emission_node_color, job_name)
@@ -913,9 +914,32 @@ class PBAKER_OT_bake(bpy.types.Operator):
             bpy.context.scene.render.engine = self.render_engine
             bpy.context.scene.cycles.preview_pause = self.preview_pause
 
-    def execute(self, context):
+    def select_uv_map(self, obj):
+        # # 2.79
+        # if is_2_79:
+        #     uv_layers = obj.data.uv_textures
+        # # 2.80
+        # else:
+        #     uv_layers = obj.data.uv_layers
+        
+        # 2.79/2.80
+        uv_layers = obj.data.uv_textures if is_2_79 else obj.data.uv_layers
+
+        if self.settings.select_uv_map == 'ACTIVE_RENDER':
+            for i in range(0, len(obj.data.uv_layers)):
+                if uv_layers[i].active_render:
+                    uv_layers.active_index = i
+                    break
+        else:
+            index_uv_layer = int(self.settings.select_uv_map) - 1
+            if index_uv_layer <= len(obj.data.uv_layers) - 1:
+                uv_layers.active_index = index_uv_layer
+
+    # def execute(self, context):
+
+    def invoke(self, context, event):
         # 2.79
-        if bpy.app.version_string.startswith('2.7'):
+        if is_2_79:
             self.prefs = context.user_preferences.addons[__package__].preferences
         # 2.80
         else:
@@ -1045,12 +1069,17 @@ class PBAKER_OT_bake(bpy.types.Operator):
                 active_outputs = get_active_outputs(obj_list)
                 all_material_outputs = get_all_material_outputs(obj_list)
                 # 2.80
-                if not bpy.app.version_string.startswith('2.7'):
+                if not is_2_79:
                     set_material_outputs_target_to_all(obj_list)
 
                 # Auto UV project
                 if not self.settings.auto_uv_project == 'OFF':
                     self.auto_uv_project(obj)
+
+                # UV Map selection
+                orig_uv_layers_active_index = obj.data.uv_layers.active_index
+                if not self.settings.select_uv_map == 'SELECTED':
+                    self.select_uv_map(obj)
 
                 # (optional) new material
                 if self.settings.make_new_material:
@@ -1125,6 +1154,11 @@ class PBAKER_OT_bake(bpy.types.Operator):
                     self.disable_material_outputs(obj)
                     for mat_output in active_outputs:
                         mat_output.is_active_output = True
+                    # reselect UV Map
+                    if not self.settings.set_selected_uv_map:
+                        uv_layers = obj.data.uv_textures if is_2_79 else obj.data.uv_layers
+                        uv_layers.active_index = orig_uv_layers_active_index
+
 
                     # glossiness
                     if job_name == "Roughness" and self.settings.use_invert_roughness:
@@ -1151,7 +1185,7 @@ class PBAKER_OT_bake(bpy.types.Operator):
 
                 # Clean up!
                 # 2.80
-                if not bpy.app.version_string.startswith('2.7'):
+                if not is_2_79:
                     for mat_output, target in all_material_outputs.items():
                         mat_output.target = target
 
@@ -1205,16 +1239,23 @@ class PBAKER_OT_bake(bpy.types.Operator):
             active_outputs = get_active_outputs(bake_objects)
             all_material_outputs = get_all_material_outputs(bake_objects)
             # 2.80
-            if not bpy.app.version_string.startswith('2.7'):
+            if not is_2_79:
                 set_material_outputs_target_to_all(bake_objects)
 
             # Auto UV project
             # no Auto Smart UV Project in 2.79
-            if bpy.app.version_string.startswith('2.8'):
+            if is_2_80:
                 if self.settings.auto_uv_project == 'SMART':
                     self.smart_project()
                 elif self.settings.auto_uv_project == 'LIGHTMAP':
                     self.lightmap_pack()
+
+            # UV Map selection
+            orig_uv_layers_active_indices = {}
+            for obj in bake_objects:
+                orig_uv_layers_active_indices[obj] = obj.data.uv_layers.active_index
+                if not self.settings.select_uv_map == 'SELECTED':
+                    self.select_uv_map(obj)
 
             # (optional) new material
             if self.settings.make_new_material:
@@ -1285,6 +1326,12 @@ class PBAKER_OT_bake(bpy.types.Operator):
                     self.delete_tagged_nodes(obj, NODE_TAG)
                     # reactivate Material Outputs
                     self.disable_material_outputs(obj)
+                    # reselect UV Map
+                    if not self.settings.set_selected_uv_map:
+                        uv_layers = obj.data.uv_textures if is_2_79 else obj.data.uv_layers
+                        uv_layers.active_index = orig_uv_layers_active_indices[obj]
+
+
                 for mat_output in active_outputs:
                     mat_output.is_active_output = True
 
@@ -1317,7 +1364,7 @@ class PBAKER_OT_bake(bpy.types.Operator):
 
             # Clean up!
             # 2.80
-            if not bpy.app.version_string.startswith('2.7'):
+            if not is_2_79:
                 for mat_output, target in all_material_outputs.items():
                     mat_output.target = target
 
@@ -1345,10 +1392,6 @@ class PBAKER_OT_bake(bpy.types.Operator):
                     joblist = list(set(joblist).union(
                         set(self.get_joblist_from_object(obj))))
 
-            # if self.settings.use_Diffuse: # TODO does not work properly
-            #     if "Diffuse" not in joblist:
-            #         joblist.append("Diffuse")
-
             if self.settings.use_material_id:
                 if "MatID" not in joblist:
                     joblist.append("MatID")
@@ -1371,12 +1414,17 @@ class PBAKER_OT_bake(bpy.types.Operator):
             active_outputs = get_active_outputs(bake_objects)
             all_material_outputs = get_all_material_outputs(bake_objects)
             # 2.80
-            if not bpy.app.version_string.startswith('2.7'):
+            if not is_2_79:
                 set_material_outputs_target_to_all(bake_objects)
 
             # Auto UV project
             if not self.settings.auto_uv_project == 'OFF':
                 self.auto_uv_project(self.active_object)
+
+            # UV Map selection
+            orig_uv_layers_active_index = self.active_object.data.uv_layers.active_index
+            if not self.settings.select_uv_map == 'SELECTED':
+                self.select_uv_map(self.active_object)
 
             # new material
             new_mat_name = self.active_object.name if self.settings.new_material_prefix == "" else self.settings.new_material_prefix
@@ -1454,6 +1502,11 @@ class PBAKER_OT_bake(bpy.types.Operator):
                 self.disable_material_outputs(self.active_object)
                 for mat_output in active_outputs:
                     mat_output.is_active_output = True
+                # reselect UV Map
+                if not self.settings.set_selected_uv_map:
+                    obj = self.active_object
+                    uv_layers = obj.data.uv_textures if is_2_79 else obj.data.uv_layers
+                    uv_layers.active_index = orig_uv_layers_active_index
 
                 # glossiness
                 if job_name == "Roughness" and self.settings.use_invert_roughness:
@@ -1479,7 +1532,7 @@ class PBAKER_OT_bake(bpy.types.Operator):
 
             # Clean up!
             # 2.80
-            if not bpy.app.version_string.startswith('2.7'):
+            if not is_2_79:
                 for mat_output, target in all_material_outputs.items():
                     mat_output.target = target
 

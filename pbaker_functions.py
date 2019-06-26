@@ -3,6 +3,11 @@ import os
 import numpy
 import time
 
+
+is_2_79 = True if bpy.app.version_string.startswith('2.7') else False
+is_2_80 = True if bpy.app.version_string.startswith('2.8') else False
+
+
 NODE_TAG = 'p_baker_node'
 MATERIAL_TAG = 'p_baker_material'
 MATERIAL_TAG_VERTEX = 'p_baker_material_vertex'
@@ -30,7 +35,7 @@ NODE_INPUTS = [
     'Tangent'
 ]
 # 2.80
-if bpy.app.version_string.startswith('2.8'):
+if is_2_80:
     NODE_INPUTS.extend(['Emission', 'Alpha'])
 
 NORMAL_INPUTS = ['Normal', 'Clearcoat Normal', 'Tangent']
@@ -39,11 +44,11 @@ SRGB_INPUTS = ['Color', 'Base Color']
 
 ALPHA_NODES = {
     # "Alpha":'BSDF_TRANSPARENT',
-    "Translucent_Alpha":'BSDF_TRANSLUCENT',
-    "Glass_Alpha":'BSDF_GLASS'
+    "Translucent_Alpha": 'BSDF_TRANSLUCENT',
+    "Glass_Alpha": 'BSDF_GLASS'
 }
 # 2.79
-if bpy.app.version_string.startswith('2.7'):
+if is_2_79:
     ALPHA_NODES["Alpha"] = 'BSDF_TRANSPARENT'
 
 
@@ -56,7 +61,7 @@ BSDF_NODES = [
     'BSDF_TRANSPARENT',
     'BSDF_TRANSLUCENT',
     'BSDF_GLASS'
-    ]
+]
 
 IMAGE_FILE_FORMAT_ENDINGS = {
     "BMP": "bmp",
@@ -74,8 +79,8 @@ IMAGE_NODE_OFFSET_X = -900
 IMAGE_NODE_OFFSET_Y = -260
 IMAGE_NODE_WIDTH = 300
 
-PRINCIPLED_BAKER_TEMP_MATERIAL_NAME = "PRINCIPLED_BAKER_TEMP_MATERIAL_{}".format(time.time())
-
+PRINCIPLED_BAKER_TEMP_MATERIAL_NAME = "PRINCIPLED_BAKER_TEMP_MATERIAL_{}".format(
+    time.time())
 
 
 def fill_image(image, color):
@@ -149,7 +154,7 @@ def get_combined_images(img1, img2, from_channel, to_channel):
     size = img1.size[0] * img1.size[1]
     a = numpy.array(img1.pixels).reshape(size, n)
     b = numpy.array(img2.pixels).reshape(size, n)
-    a[:, to_channel] = b[:, from_channel] # numpy magic happens here
+    a[:, to_channel] = b[:, from_channel]  # numpy magic happens here
     return a.reshape(size * n)
 
 
@@ -157,7 +162,7 @@ def get_invert_image(img):
     n = 4
     size = img.size[0] * img.size[1]
     a = numpy.array(img.pixels).reshape(size, n)
-    a[:,0:3] = 1 - a[:,0:3]
+    a[:, 0:3] = 1 - a[:, 0:3]
     return a.reshape(size * n)
 
 
@@ -192,7 +197,7 @@ def are_node_types_in_node_tree(node, node_types):
 
 def select_set(obj, s):
     # 2.79
-    if bpy.app.version_string.startswith('2.7'):
+    if is_2_79:
         obj.select = s
     # 2.80
     else:
@@ -215,7 +220,7 @@ def save_image_as(image, file_path, file_format, color_mode='RGB', color_depth='
         s.quality = quality
         s.tiff_codec = tiff_codec
         s.exr_codec = exr_codec
-        
+
         # save
         file_path = os.path.normpath(image.filepath.lstrip("//"))
         image.save_render(file_path)
@@ -249,7 +254,8 @@ def prepare_bake_factor(mat, socket, new_socket, node_type, factor_name='Fac'):
         for input_socket in node.inputs:
             if input_socket.is_linked:
                 from_socket = input_socket.links[0].from_socket
-                prepare_bake_factor(mat, from_socket, new_socket, node_type, factor_name)
+                prepare_bake_factor(
+                    mat, from_socket, new_socket, node_type, factor_name)
 
 
 def prepare_bake_color(mat, from_socket, new_socket):
@@ -258,18 +264,18 @@ def prepare_bake_color(mat, from_socket, new_socket):
 
     if not is_node_type_in_node_tree(node, 'AMBIENT_OCCLUSION'):
         mat.node_tree.links.new(from_socket, new_socket)
-    
+
     else:
         if node.type == 'MIX_RGB':
             color1 = node.inputs['Color1'].default_value
             color2 = node.inputs['Color2'].default_value
             fac = node.inputs['Fac'].default_value
             new_node = new_mixrgb_node(mat, fac, color1, color2)
-            new_node.inputs['Fac'].default_value = node.inputs['Fac'].default_value            
+            new_node.inputs['Fac'].default_value = node.inputs['Fac'].default_value
             mat.node_tree.links.new(new_node.outputs[0], new_socket)
 
             if node.blend_type == 'MIX':
-     
+
                 if node.inputs['Fac'].is_linked:
                     from_socket = node.inputs['Fac'].links[0].from_socket
                     new_socket = new_node.inputs['Fac']
@@ -292,7 +298,7 @@ def prepare_bake_color(mat, from_socket, new_socket):
                     prepare_bake_color(mat, from_socket, new_socket)
 
             else:
-               
+
                 if node.inputs['Color1'].is_linked:
                     from_node = node.inputs['Color1'].links[0].from_node
                     if from_node.type == 'AMBIENT_OCCLUSION':
@@ -331,9 +337,9 @@ def prepare_bake(mat, socket, new_socket, input_socket_name):
         color = (0.5, 0.5, 1.0, 1.0)
     else:
         color = (0.0, 0.0, 0.0, 0.0)
-    
+
     # 2.79
-    if bpy.app.version_string.startswith('2.7'):
+    if is_2_79:
         if input_socket_name == 'Displacement':
             if socket.is_linked:
                 from_socket = socket.links[0].from_socket
@@ -346,7 +352,7 @@ def prepare_bake(mat, socket, new_socket, input_socket_name):
         prepare_bake(mat, from_socket, new_socket, input_socket_name)
 
     elif node.type == 'MIX_SHADER':
-        color2 = [1,1,1,0] if input_socket_name == 'Fac' else color
+        color2 = [1, 1, 1, 0] if input_socket_name == 'Fac' else color
         fac = node.inputs['Fac'].default_value
         mix_node = new_mixrgb_node(mat, fac, color, color2)
         mat.node_tree.links.new(mix_node.outputs[0], new_socket)
@@ -404,7 +410,7 @@ def prepare_bake(mat, socket, new_socket, input_socket_name):
 
         if input_socket_name in node.inputs.keys():
             input_socket = node.inputs[input_socket_name]
-            
+
             if input_socket.type == 'RGBA':
                 if input_socket.is_linked:
                     o = input_socket.links[0].from_socket
@@ -420,12 +426,14 @@ def prepare_bake(mat, socket, new_socket, input_socket_name):
                     if from_socket.type == 'VALUE':
                         mat.node_tree.links.new(from_socket, new_socket)
                     else:  # RGB to BW
-                        node = mat.node_tree.nodes.new(type="ShaderNodeRGBToBW")
+                        node = mat.node_tree.nodes.new(
+                            type="ShaderNodeRGBToBW")
                         node[NODE_TAG] = 1
                         mat.node_tree.links.new(from_socket, node.inputs[0])
                         mat.node_tree.links.new(node.outputs[0], new_socket)
                 else:
-                    value_node = mat.node_tree.nodes.new(type="ShaderNodeValue")
+                    value_node = mat.node_tree.nodes.new(
+                        type="ShaderNodeValue")
                     value_node[NODE_TAG] = 1
                     value_node.outputs[0].default_value = node.inputs[input_socket_name].default_value
                     mat.node_tree.links.new(value_node.outputs[0], new_socket)
@@ -433,13 +441,15 @@ def prepare_bake(mat, socket, new_socket, input_socket_name):
             elif input_socket.type == 'VECTOR':
                 if input_socket.name == input_socket_name:
                     # 2.79
-                    if bpy.app.version_string.startswith('2.7'):
+                    if is_2_79:
                         if input_socket.is_linked:
                             from_socket = input_socket.links[0].from_socket
                             if from_socket.node.type == 'NORMAL_MAP':
-                                prepare_bake(mat, from_socket, new_socket, 'Color')
+                                prepare_bake(mat, from_socket,
+                                             new_socket, 'Color')
                             if from_socket.node.type == 'BUMP':
-                                prepare_bake(mat, from_socket, new_socket, 'Height')
+                                prepare_bake(mat, from_socket,
+                                             new_socket, 'Height')
                     # 2.80
                     else:
                         if input_socket.is_linked:
@@ -450,16 +460,18 @@ def prepare_bake(mat, socket, new_socket, input_socket_name):
             for input_socket in node.inputs:
                 if input_socket.is_linked:
                     from_socket = input_socket.links[0].from_socket
-                    prepare_bake(mat, from_socket, new_socket, input_socket_name)
+                    prepare_bake(mat, from_socket, new_socket,
+                                 input_socket_name)
 
 
 def add_temp_material(obj):
-    name = "PRINCIPLED_BAKER_TEMP_MATERIAL_FOR_VERTEX_COLOR_{}".format(time.time())
+    name = "PRINCIPLED_BAKER_TEMP_MATERIAL_FOR_VERTEX_COLOR_{}".format(
+        time.time())
     mat = bpy.data.materials.new(name)
     mat[MATERIAL_TAG_VERTEX] = 1
     mat.use_nodes = True
     principled_node = find_node_by_type(mat, 'BSDF_PRINCIPLED')
-    principled_node.inputs["Base Color"].default_value = [0,0,0,1]
+    principled_node.inputs["Base Color"].default_value = [0, 0, 0, 1]
     obj.data.materials.append(mat)
 
 
@@ -480,7 +492,6 @@ def is_socket_linked_in_node_tree(node, input_socket_name):
     return False
 
 
-
 def has_material(obj):
     if len(obj.material_slots) >= 1:
         for mat_slot in obj.material_slots:
@@ -493,7 +504,7 @@ def has_material(obj):
                         if not material_output.inputs['Surface'].is_linked:
                             return False
                         else:
-                            return True                    
+                            return True
     else:
         return False
 
@@ -535,7 +546,7 @@ def get_all_material_outputs(objects):
                 for node in mat_slot.material.node_tree.nodes:
                     if node.type == "OUTPUT_MATERIAL":
                         # 2.79
-                        if bpy.app.version_string.startswith('2.7'):
+                        if is_2_79:
                             outputs[node] = None
                         # 2.80
                         else:
