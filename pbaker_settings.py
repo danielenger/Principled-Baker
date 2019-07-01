@@ -1,25 +1,15 @@
 import bpy
-from bpy.types import (Panel,
-                       Operator,
-                       AddonPreferences,
-                       PropertyGroup,
-                       )
-from bpy.props import (StringProperty,
-                       BoolProperty,
-                       IntProperty,
-                       FloatProperty,
-                       # FloatVectorProperty,
-                       EnumProperty,
-                       PointerProperty,
-                       )
+from bpy.props import (BoolProperty, EnumProperty, FloatProperty, IntProperty,
+                       PointerProperty, StringProperty)
+from bpy.types import AddonPreferences, Operator, Panel, PropertyGroup
 
 
 def color_mode_items(scene, context):
     if scene.file_format in ['PNG', 'TARGA', 'TIFF', 'OPEN_EXR']:
         items = [
-            ('BW', "BW", ""),
             ('RGB', "RGB", ""),
-            ('RGBA', "RGBA", "")
+            ('RGBA', "RGBA", ""),
+            # ('BW', "BW", ""),  # TODO remove BW
         ]
     else:
         items = [
@@ -181,7 +171,7 @@ class PBAKER_settings(bpy.types.PropertyGroup):
         maxlen=1024,
     )
     use_invert_roughness: BoolProperty(
-        name="Glossiness (invert Roughness)",
+        name="Glossiness",
         description="Glossiness from inverted Roughness",
         default=False
     )
@@ -461,4 +451,9 @@ class PBAKER_settings(bpy.types.PropertyGroup):
     # set_active_render_uv_map: BoolProperty(  # TODO
     #     name="Set as active render UV Map",
     #     description='',
+    #     default=False)
+
+    # use_shortlist: BoolProperty(  # TODO short list
+    #     name="Short List",
+    #     description='Show the most common Bake Types only',
     #     default=False)

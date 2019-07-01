@@ -18,7 +18,7 @@ bl_info = {
     "name": "Principled Baker",
     "description": "bakes all inputs of Principled BSDF to image textures",
     "author": "Daniel Engler",
-    "version": (0, 3, 1),
+    "version": (0, 3, 2),
     "blender": (2, 80, 0),
     "location": "Shader Editor Toolbar",
     "category": "Node",
@@ -26,27 +26,47 @@ bl_info = {
 
 import bpy
 
-from . pbaker_settings import PBAKER_settings
-from . pbaker_prefs import PBAKER_prefs
-from . pbaker_panel import PBAKER_PT_panel
-from . pbaker_bake import PBAKER_OT_bake
+from .pbaker_bake import PBAKER_OT_bake
+from .pbaker_list import *
+from .pbaker_panel import PBAKER_PT_panel
+from .pbaker_prefs import PBAKER_prefs
+from .pbaker_settings import PBAKER_settings
+from .pbaker_preset import *
 
+classes = (
+    PBAKER_OT_bake,
+    PBAKER_PT_panel,
+    PBAKER_prefs,
+    PBAKER_settings,
+    PBAKER_UL_List,
+    PBAKER_ListItem,
+    PBAKER_BAKELIST_OT_Init,
+    PBAKER_BAKELIST_OT_Update,
+    PBAKER_BAKELIST_OT_Delete,
+    PBAKER_BAKELIST_OT_Reset,
+    PBAKER_BAKELIST_OT_Disable_All,
+    PBAKER_BAKELIST_OT_MoveItem_Up,
+    PBAKER_BAKELIST_OT_MoveItem_Down,
+    PBAKER_AddPresetObjectDisplay,
+    PBAKER_MT_display_presets,
+)
 
 def register():
-   bpy.utils.register_class(PBAKER_prefs)
-   bpy.utils.register_class(PBAKER_settings)
-   bpy.utils.register_class(PBAKER_OT_bake)
-   bpy.utils.register_class(PBAKER_PT_panel)
+   for cls in classes:
+      bpy.utils.register_class(cls)
+
    bpy.types.Scene.principled_baker_settings = bpy.props.PointerProperty(type=PBAKER_settings)
+   bpy.types.Scene.principled_baker_bakelist = bpy.props.CollectionProperty(type = PBAKER_ListItem)
+   bpy.types.Scene.principled_baker_bakelist_index = bpy.props.IntProperty(name="Bakelist Index", default = 0)
 
     
 def unregister():
-   bpy.utils.unregister_class(PBAKER_PT_panel)
-   bpy.utils.unregister_class(PBAKER_OT_bake)
-   bpy.utils.unregister_class(PBAKER_settings)
-   bpy.utils.unregister_class(PBAKER_prefs)
+   for cls in reversed(classes):
+      bpy.utils.unregister_class(cls)
+
    del bpy.types.Scene.principled_baker_settings
+   del bpy.types.Scene.principled_baker_bakelist_index
 
 
 if __name__ == "__main__":
-    register()
+   register()

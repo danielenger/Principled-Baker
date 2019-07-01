@@ -15,61 +15,14 @@ class PBAKER_OT_bake(bpy.types.Operator):
     bl_description = "bake all inputs of a Principled BSDF to image textures"
     bl_options = {'REGISTER', 'UNDO'}
 
-
     def get_joblist_manual(self):
         joblist = []
-
-        if self.settings.use_Alpha:
-            joblist.append("Alpha")
-        if self.settings.use_Emission:
-            joblist.append("Emission")
-        if self.settings.use_AO:
-            joblist.append("AO")
-
-        if self.settings.use_Base_Color:
-            joblist.append("Color")
-        if self.settings.use_Metallic:
-            joblist.append("Metallic")
-        if self.settings.use_Roughness:
-            joblist.append("Roughness")
-        if self.settings.use_Normal:
-            joblist.append("Normal")
-        if self.settings.use_Bump:
-            joblist.append("Bump")
-        if self.settings.use_Displacement:
-            joblist.append("Displacement")
-
-        if self.settings.use_Specular:
-            joblist.append("Specular")
-        if self.settings.use_Anisotropic:
-            joblist.append("Anisotropic")
-        if self.settings.use_Anisotropic_Rotation:
-            joblist.append("Anisotropic Rotation")
-        if self.settings.use_Clearcoat:
-            joblist.append("Clearcoat")
-        if self.settings.use_Clearcoat_Normal:
-            joblist.append("Clearcoat Normal")
-        if self.settings.use_Clearcoat_Roughness:
-            joblist.append("Clearcoat Roughness")
-        if self.settings.use_IOR:
-            joblist.append("IOR")
-        if self.settings.use_Sheen:
-            joblist.append("Sheen")
-        if self.settings.use_Sheen_Tint:
-            joblist.append("Sheen Tint")
-        if self.settings.use_Specular_Tint:
-            joblist.append("Specular Tint")
-        if self.settings.use_Subsurface:
-            joblist.append("Subsurface")
-        if self.settings.use_Subsurface_Color:
-            joblist.append("Subsurface Color")
-        if self.settings.use_Subsurface_Radius:
-            joblist.append("Subsurface Radius")
-        if self.settings.use_Tangent:
-            joblist.append("Tangent")
-        if self.settings.use_Transmission:
-            joblist.append("Transmission")
+        bakelist = bpy.context.scene.principled_baker_bakelist
+        for job_name, data in bakelist.items():
+            if data.do_bake:
+                joblist.append(job_name)
         return joblist
+
 
     def get_joblist_from_object(self, obj):
         joblist = []
@@ -113,8 +66,8 @@ class PBAKER_OT_bake(bpy.types.Operator):
 
                     # AO
                     if is_node_type_in_node_tree(material_output, 'AMBIENT_OCCLUSION'):
-                        if not 'AO' in joblist:
-                            joblist.append('AO')
+                        if not 'Ambient Occlusion' in joblist:
+                            joblist.append('Ambient Occlusion')
 
                     # Displacement
                     socket_name = 'Displacement'
@@ -149,25 +102,14 @@ class PBAKER_OT_bake(bpy.types.Operator):
         return joblist
 
     def get_suffix(self, input_name):
-        suffix = ""
-        if input_name == 'Color':
-            suffix = self.settings.suffix_color
-        elif input_name == 'Metallic':
-            suffix = self.settings.suffix_metallic
-        elif input_name == 'Roughness':
-            suffix = self.settings.suffix_roughness
-        elif input_name == 'Glossiness':
-            suffix = self.settings.suffix_glossiness
-        elif input_name == 'Normal':
-            suffix = self.settings.suffix_normal
-        elif input_name == 'Bump':
-            suffix = self.settings.suffix_bump
-        elif input_name == 'Displacement':
-            suffix = self.settings.suffix_displacement
-        elif input_name == 'Vertex_Color':
+        bakelist = bpy.context.scene.principled_baker_bakelist
+
+        if input_name == 'Vertex_Color':
             suffix = self.settings.suffix_vertex_color
+        elif input_name == 'MatID':
+            suffix = self.settings.suffix_material_id
         else:
-            suffix = '_' + input_name
+            suffix = bakelist[input_name]['suffix']
 
         if self.settings.suffix_text_mod == 'lower':
             suffix = suffix.lower()
@@ -274,7 +216,7 @@ class PBAKER_OT_bake(bpy.types.Operator):
             tex_coord_node.location.x = mapping_node.location.x - tex_coord_node.width - 100
 
         for name, image in new_images.items():
-            if name not in ["AO"]:  # "Vertex_Color", "MatID"
+            if name not in ['Ambient Occlusion']:  # "Vertex_Color", "MatID"
                 image_node = new_image_node(new_mat)
                 image_node.label = name
 
@@ -423,13 +365,13 @@ class PBAKER_OT_bake(bpy.types.Operator):
                         sib.location.x + NODE_OFFSET_X, mid_offset_y)
 
                 # mix AO with color
-                if 'AO' in new_images.keys():
+                if 'Ambient Occlusion' in new_images.keys():
                     ao_image_node = new_image_node(new_mat)
                     ao_image_node.label = 'Ambient Occlusion'
                     # 2.79
                     if is_2_79:
                         ao_image_node.color_space = 'NONE'
-                    ao_image_node.image = new_images['AO']
+                    ao_image_node.image = new_images['Ambient Occlusion']
                     ao_image_node.width = IMAGE_NODE_WIDTH
                     ao_image_node.location.x = principled_node.location.x + IMAGE_NODE_OFFSET_X
                     ao_image_node.location.y = principled_node.location.y + \
@@ -450,7 +392,7 @@ class PBAKER_OT_bake(bpy.types.Operator):
                                                 mix_node.inputs['Color2'])
 
             # skip some
-            elif name in ["AO", "Vertex_Color", "MatID", "Diffuse"]:
+            elif name in ['Ambient Occlusion', "Vertex_Color", "MatID", "Diffuse"]:
                 pass
 
             else:
@@ -749,7 +691,7 @@ class PBAKER_OT_bake(bpy.types.Operator):
             elif job_name == 'Bump':
                 prepare_bake(mat, socket_to_surface,
                              socket_to_pb_emission_node_color, 'Height')
-            elif job_name == 'AO':
+            elif job_name == 'Ambient Occlusion':
                 prepare_bake_ao(mat, socket_to_surface,
                                 socket_to_pb_emission_node_color)
             else:
@@ -921,7 +863,7 @@ class PBAKER_OT_bake(bpy.types.Operator):
         # # 2.80
         # else:
         #     uv_layers = obj.data.uv_layers
-        
+
         # 2.79/2.80
         uv_layers = obj.data.uv_textures if is_2_79 else obj.data.uv_layers
 
@@ -1039,9 +981,11 @@ class PBAKER_OT_bake(bpy.types.Operator):
                 # Populate joblist
                 joblist = []
                 if self.settings.use_autodetect:
-                    joblist = self.get_joblist_from_object(obj)
+                    # joblist = self.get_joblist_from_object(obj)
+                    joblist = get_joblist_from_object(obj)
                 else:
-                    joblist = self.get_joblist_manual()
+                    # joblist = self.get_joblist_manual()
+                    joblist = get_joblist_manual()
 
                 if self.settings.use_Diffuse:
                     if "Diffuse" not in joblist:
@@ -1159,7 +1103,6 @@ class PBAKER_OT_bake(bpy.types.Operator):
                         uv_layers = obj.data.uv_textures if is_2_79 else obj.data.uv_layers
                         uv_layers.active_index = orig_uv_layers_active_index
 
-
                     # glossiness
                     if job_name == "Roughness" and self.settings.use_invert_roughness:
                         self.create_gloss_image(obj.name, image)
@@ -1211,7 +1154,11 @@ class PBAKER_OT_bake(bpy.types.Operator):
             for obj in bake_objects:
                 if self.settings.use_autodetect:
                     joblist = list(set(joblist).union(
-                        set(self.get_joblist_from_object(obj))))
+                        # set(self.get_joblist_from_object(obj))))
+                        set(get_joblist_from_object(obj))))
+                else:
+                    # joblist = self.get_joblist_manual()
+                    joblist = get_joblist_manual()
 
             if self.settings.use_Diffuse:
                 if "Diffuse" not in joblist:
@@ -1331,7 +1278,6 @@ class PBAKER_OT_bake(bpy.types.Operator):
                         uv_layers = obj.data.uv_textures if is_2_79 else obj.data.uv_layers
                         uv_layers.active_index = orig_uv_layers_active_indices[obj]
 
-
                 for mat_output in active_outputs:
                     mat_output.is_active_output = True
 
@@ -1390,7 +1336,11 @@ class PBAKER_OT_bake(bpy.types.Operator):
             for obj in bake_objects:
                 if self.settings.use_autodetect:
                     joblist = list(set(joblist).union(
-                        set(self.get_joblist_from_object(obj))))
+                        # set(self.get_joblist_from_object(obj))))
+                        set(get_joblist_from_object(obj))))
+                else:
+                    # joblist = get_joblist_manual()
+                    joblist = self.get_joblist_manual()
 
             if self.settings.use_material_id:
                 if "MatID" not in joblist:

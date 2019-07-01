@@ -1,8 +1,8 @@
-import bpy
 import os
-import numpy
 import time
 
+import bpy
+import numpy
 
 is_2_79 = True if bpy.app.version_string.startswith('2.7') else False
 is_2_80 = True if bpy.app.version_string.startswith('2.8') else False
@@ -561,3 +561,128 @@ def set_material_outputs_target_to_all(objects):
                 for node in mat_slot.material.node_tree.nodes:
                     if node.type == "OUTPUT_MATERIAL":
                         node.target = 'ALL'
+
+
+# TODO:
+
+def get_value_list(node, value_name):
+    value_list = []
+
+    def find_values(node, value_name):
+        if not node.type == 'NORMAL_MAP':
+            if value_name == 'Color' and node.type == 'BSDF_PRINCIPLED':
+                tmp_value_name = 'Base Color'
+            else:
+                tmp_value_name = value_name
+            if tmp_value_name in node.inputs.keys():
+                if node.inputs[tmp_value_name].type == 'RGBA':
+                    [r, g, b, a] = node.inputs[tmp_value_name].default_value
+                    value_list.append([r, g, b, a])
+                else:
+                    value_list.append(
+                        node.inputs[value_name].default_value)
+
+            for socket in node.inputs:
+                if socket.is_linked:
+                    from_node = socket.links[0].from_node
+                    find_values(from_node, value_name)
+
+    find_values(node, value_name)
+    return value_list
+
+
+def get_joblist_from_object(obj):
+    joblist = []
+    settings = bpy.context.scene.principled_baker_settings
+
+    # add to joblist if values differ
+    for value_name in NODE_INPUTS:
+        if value_name not in joblist:
+            if value_name not in ['Subsurface Radius', 'Normal', 'Clearcoat Normal', 'Tangent']:
+                value_list = []
+                for mat_slot in obj.material_slots:
+                    if mat_slot.material:
+                        mat = mat_slot.material
+                        if not MATERIAL_TAG in mat.keys():
+                            material_output = get_active_output(mat)
+                            value_list.extend(get_value_list(
+                                material_output, value_name))
+                # if len(value_list) >= 1:
+                if value_list:
+                    if is_list_equal(value_list):
+                        if settings.make_new_material or settings.bake_mode == 'SELECTED_TO_ACTIVE':
+                            new_principled_node_settings[value_name] = value_list[0]
+                    else:
+                        joblist.append(value_name)
+
+    # search material for jobs
+    for mat_slot in obj.material_slots:
+        if mat_slot.material:
+            if not MATERIAL_TAG in mat_slot.material.keys():
+                # material_output = find_node_by_type(mat_slot.material, 'OUTPUT_MATERIAL')
+                material_output = get_active_output(mat_slot.material)
+                # add special cases:
+                # Alpha for nodes: Transparent, Translucent, Glass
+                for alpha_name, n_type in ALPHA_NODES.items():
+                    if is_node_type_in_node_tree(material_output, n_type):
+                        if not alpha_name in joblist:
+                            joblist.append(alpha_name)
+                # Emission
+                if is_node_type_in_node_tree(material_output, 'EMISSION'):
+                    if not 'Emission' in joblist:
+                        joblist.append('Emission')
+
+                # AO
+                if is_node_type_in_node_tree(material_output, 'AMBIENT_OCCLUSION'):
+                    if not 'AO' in joblist:
+                        joblist.append('AO')
+
+                # Displacement
+                socket_name = 'Displacement'
+                if is_socket_linked_in_node_tree(material_output, socket_name):
+                    # 2.79
+                    if is_2_79:
+                        if not socket_name in joblist:
+                            joblist.append(socket_name)
+                    # 2.80
+                    else:
+                        if is_node_type_in_node_tree(material_output, 'DISPLACEMENT'):
+                            if not socket_name in joblist:
+                                joblist.append(socket_name)
+                # Bump
+                socket_name = 'Bump'
+                if settings.use_Bump and is_node_type_in_node_tree(material_output, 'BUMP'):
+                    if not socket_name in joblist:
+                        joblist.append(socket_name)
+
+                # add linked inputs to joblist
+                if are_node_types_in_node_tree(material_output, BSDF_NODES):
+                    for socket_name in NODE_INPUTS:
+                        if is_socket_linked_in_node_tree(material_output, socket_name):
+                            if not socket_name in joblist:
+                                joblist.append(socket_name)
+
+    # force bake of Color, if user wants alpha in color
+    if settings.use_alpha_to_color and settings.color_mode == 'RGBA':
+        if not 'Color' in joblist:
+            joblist.append('Color')
+
+    return joblist
+
+
+def get_joblist_from_objects(objs):
+    joblist = []
+
+    for obj in objs:
+        for job in get_joblist_from_object(obj):
+            if job not in joblist:
+                joblist.append(job)
+    return joblist
+
+def get_joblist_manual():
+    joblist = []
+    bakelist = bpy.context.scene.principled_baker_bakelist
+    for job_name, data in bakelist.items():
+        if data.do_bake:
+            joblist.append(job_name)
+    return joblist
