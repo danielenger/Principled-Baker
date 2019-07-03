@@ -58,6 +58,15 @@ class PBAKER_settings(bpy.types.PropertyGroup):
         items=color_depth_items
     )
 
+    compression: IntProperty(
+        name="Quality",
+        default=15,
+        min=0,
+        soft_max=100,
+        step=1,
+        subtype='PERCENTAGE'
+    )
+
     exr_codec: EnumProperty(
         name="Codec",
         items=(
@@ -136,6 +145,7 @@ class PBAKER_settings(bpy.types.PropertyGroup):
 
     use_overwrite: BoolProperty(
         name="Overwrite",
+        description="Be careful with Overwrite! It does what it says!",
         default=False
     )
 
@@ -384,40 +394,11 @@ class PBAKER_settings(bpy.types.PropertyGroup):
         default='OBJECT'
     )
 
-    use_Alpha: BoolProperty(name="Alpha/Transparency", default=False)
-    use_Emission: BoolProperty(name="Emission", default=False)
-    use_AO: BoolProperty(name="Ambient Occlusion (node)", default=False)
-    use_vertex_color: BoolProperty(name="Vertex Color", default=False)
-    use_material_id: BoolProperty(name="Material ID", default=False)
-
-    use_Base_Color: BoolProperty(name="Color", default=True)
-    use_Metallic: BoolProperty(name="Metallic", default=True)
-    use_Roughness: BoolProperty(name="Roughness", default=True)
-
-    use_Normal: BoolProperty(name="Normal", default=True)
     use_Bump: BoolProperty(name="Bump (Height)", default=False)
-    use_Displacement: BoolProperty(name="Displacement", default=False)
 
-    use_Anisotropic: BoolProperty(name="Anisotropic", default=False)
-    use_Anisotropic_Rotation: BoolProperty(
-        name="Anisotropic Rotation", default=False)
-    use_Clearcoat: BoolProperty(name="Clearcoat", default=False)
-    use_Clearcoat_Normal: BoolProperty(name="Clearcoat Normal", default=False)
-    use_Clearcoat_Roughness: BoolProperty(
-        name="Clearcoat Roughness", default=False)
-    use_IOR: BoolProperty(name="IOR", default=False)
-    use_Sheen: BoolProperty(name="Sheen", default=False)
-    use_Sheen_Tint: BoolProperty(name="Sheen Tint", default=False)
-    use_Specular: BoolProperty(name="Specular", default=False)
-    use_Specular_Tint: BoolProperty(name="Specular Tint", default=False)
-    use_Subsurface: BoolProperty(name="Subsurface", default=False)
-    use_Subsurface_Color: BoolProperty(name="Subsurface Color", default=False)
-    use_Subsurface_Radius: BoolProperty(
-        name="Subsurface Radius", default=False)
-    use_Tangent: BoolProperty(name="Tangent", default=False)
-    use_Transmission: BoolProperty(name="Transmission", default=False)
-    use_Transmission_Roughness: BoolProperty(
-        name="Transmission Roughness", default=False)
+    use_vertex_color: BoolProperty(name="Vertex Color", default=False)
+
+    use_material_id: BoolProperty(name="Material ID", default=False)
 
     # Diffuse
     use_Diffuse: BoolProperty(

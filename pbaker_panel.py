@@ -35,62 +35,10 @@ class PBAKER_PT_panel(bpy.types.Panel):
             self.layout.label(text="Set Render engine to Cycles! {} is not supported.".format(
                 bpy.context.scene.render.engine), icon='ERROR')
 
+        # bake mode
         col = self.layout.box().column(align=True)
         row = col.row()
         row.prop(settings, "bake_mode", text="Bake Mode", expand=True)
-
-        # output options:
-        col = self.layout.box().column(align=True)
-        row = col.row()
-        row.prop(settings, "resolution", expand=True)
-        if settings.resolution == 'CUSTOM':
-            col.prop(settings, "custom_resolution")
-        col.separator()
-        col.prop(settings, "file_path")
-        col.prop(settings, "use_overwrite")
-
-        col.separator()
-
-        # image settings:
-        col.prop(settings, "file_format")
-
-        row = col.row()
-        row.prop(settings, "color_mode", text="Color", expand=True)
-        row = col.row()
-        row.prop(settings, "color_depth", text="Color Depth", expand=True)
-
-        if settings.file_format == 'OPEN_EXR':
-            col.prop(settings, "exr_codec", text="Codec")
-
-        if settings.file_format == 'TIFF':
-            col.prop(settings, "tiff_codec", text="Compression")
-
-        if settings.file_format == 'JPEG':
-            col.prop(settings, "quality", text="Quality")
-
-        col.separator()
-        col.prop(settings, "samples")
-        col.prop(render_settings, "margin")
-
-        # Alpha to Color
-        col_alpha_to_col = col.row()
-        col_alpha_to_col.prop(settings, "use_alpha_to_color")
-        if settings.color_mode == 'RGB':
-            col_alpha_to_col.active = False
-
-
-        col2 = self.layout.box().column(align=True)
-        col2.label(text="Selected to Active:")
-        sub = col2.column()
-        sub.prop(render_settings, "use_cage", text="Cage")
-        if render_settings.use_cage:
-            sub.prop(render_settings, "cage_extrusion", text="Extrusion")
-            sub.prop(render_settings, "cage_object", text="Cage Object")
-        else:
-            sub.prop(render_settings, "cage_extrusion", text="Ray Distance")
-
-        if not settings.bake_mode == 'SELECTED_TO_ACTIVE':
-            col2.active = False
 
         # Autodetect
         col = self.layout.box().column(align=True)
@@ -170,6 +118,62 @@ class PBAKER_PT_panel(bpy.types.Panel):
         row = col2.split()
         row.prop(settings, "use_material_id")
         row.prop(settings, "suffix_material_id", text="")
+
+        # output options:
+        col = self.layout.box().column(align=True)
+        row = col.row()
+        row.prop(settings, "resolution", expand=True)
+        if settings.resolution == 'CUSTOM':
+            col.prop(settings, "custom_resolution")
+        col.separator()
+        col.prop(settings, "file_path")
+        col.prop(settings, "use_overwrite")
+
+        col.separator()
+
+        # image settings:
+        col.prop(settings, "file_format")
+
+        row = col.row()
+        row.prop(settings, "color_mode", text="Color", expand=True)
+        row = col.row()
+        row.prop(settings, "color_depth", text="Color Depth", expand=True)
+
+        if settings.file_format == 'PNG':
+            col.prop(settings, "compression", text="Compression")
+
+        if settings.file_format == 'OPEN_EXR':
+            col.prop(settings, "exr_codec", text="Codec")
+
+        if settings.file_format == 'TIFF':
+            col.prop(settings, "tiff_codec", text="Compression")
+
+        if settings.file_format == 'JPEG':
+            col.prop(settings, "quality", text="Quality")
+
+        col.separator()
+        col.prop(settings, "samples")
+        col.prop(render_settings, "margin")
+
+        # Alpha to Color
+        col_alpha_to_col = col.row()
+        col_alpha_to_col.prop(settings, "use_alpha_to_color")
+        if settings.color_mode == 'RGB':
+            col_alpha_to_col.active = False
+
+
+        col2 = self.layout.box().column(align=True)
+        col2.label(text="Selected to Active:")
+        sub = col2.column()
+        sub.prop(render_settings, "use_cage", text="Cage")
+        if render_settings.use_cage:
+            sub.prop(render_settings, "cage_extrusion", text="Extrusion")
+            sub.prop(render_settings, "cage_object", text="Cage Object")
+        else:
+            sub.prop(render_settings, "cage_extrusion", text="Ray Distance")
+
+        if not settings.bake_mode == 'SELECTED_TO_ACTIVE':
+            col2.active = False
 
         # prefix and suffix settings:
         col = self.layout.box().column(align=True)

@@ -12,7 +12,7 @@ JOBLIST = {
     "Roughness": "_roughness",
 
     "Normal": "_normal",
-    "Bump": "_bump",
+    # "Bump": "_bump",
     "Displacement": "_disp",
 
     "Alpha": "_alpha",
@@ -51,6 +51,9 @@ JOBLIST = {
 #     "Emission": "_emission",
 #     'Ambient Occlusion': "_ao",
 # }
+
+if is_2_79:
+    JOBLIST.pop('Ambient Occlusion')
 
 
 class PBAKER_ListItem(PropertyGroup):
