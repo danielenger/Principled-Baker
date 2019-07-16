@@ -42,7 +42,7 @@ NORMAL_INPUTS = ['Normal', 'Clearcoat Normal', 'Tangent']
 
 SRGB_INPUTS = ['Color', 'Base Color']
 
-ALPHA_NODES = {
+ALPHA_NODES = {  # TODO 'BSDF_TRANSPARENT' in alpha nodes?
     # "Alpha":'BSDF_TRANSPARENT',
     "Translucent_Alpha": 'BSDF_TRANSLUCENT',
     "Glass_Alpha": 'BSDF_GLASS'
@@ -269,7 +269,6 @@ def prepare_bake_factor(mat, socket, new_socket, node_type, factor_name='Fac'):
 
 
 def prepare_bake_color(mat, from_socket, new_socket):
-
     node = from_socket.node
 
     if not is_node_type_in_node_tree(node, 'AMBIENT_OCCLUSION'):
@@ -340,7 +339,6 @@ def prepare_bake_color(mat, from_socket, new_socket):
 
 
 def prepare_bake(mat, socket, new_socket, input_socket_name):
-
     settings = bpy.context.scene.principled_baker_settings
 
     if input_socket_name in NORMAL_INPUTS:
@@ -376,15 +374,16 @@ def prepare_bake(mat, socket, new_socket, input_socket_name):
         for i in range(1, 3):
             if node.inputs[i].is_linked:
                 next_node = node.inputs[i].links[0].from_node
-                if next_node.type in ALPHA_NODES.values() and settings.use_exclude_transparent_colors:
-                    other_i = i % 2 + 1
-                    if node.inputs[other_i].is_linked:
-                        from_socket = node.inputs[other_i].links[0].from_socket
+                if settings.use_exclude_transparent_colors:
+                    if next_node.type in ALPHA_NODES.values() or next_node.type == 'BSDF_TRANSPARENT':
+                        other_i = i % 2 + 1
+                        if node.inputs[other_i].is_linked:
+                            from_socket = node.inputs[other_i].links[0].from_socket
+                            new_socket = mix_node.inputs[i]
+                    else:
+                        from_socket = node.inputs[i].links[0].from_socket
                         new_socket = mix_node.inputs[i]
-                else:
-                    from_socket = node.inputs[i].links[0].from_socket
-                    new_socket = mix_node.inputs[i]
-                prepare_bake(mat, from_socket, new_socket, input_socket_name)
+                    prepare_bake(mat, from_socket, new_socket, input_socket_name)
 
     elif node.type == 'ADD_SHADER' and not input_socket_name == 'Fac':
         mix_node = new_mixrgb_node(mat, 1, color, color)
@@ -627,7 +626,12 @@ def get_joblist_from_object(obj):
                 # material_output = find_node_by_type(mat_slot.material, 'OUTPUT_MATERIAL')
                 material_output = get_active_output(mat_slot.material)
                 # add special cases:
-                # Alpha for nodes: Transparent, Translucent, Glass
+                # Alpha node: Transparent
+                if is_node_type_in_node_tree(material_output, 'BSDF_TRANSPARENT'):
+                    if not 'Alpha' in joblist:
+                        joblist.append('Alpha')
+
+                # Alpha for nodes: Translucent, Glass
                 for alpha_name, n_type in ALPHA_NODES.items():
                     if is_node_type_in_node_tree(material_output, n_type):
                         if not alpha_name in joblist:
