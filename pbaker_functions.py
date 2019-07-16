@@ -228,18 +228,9 @@ def save_image_as(image, file_path, file_format, color_mode='RGB', color_depth='
 
     image.use_view_as_render = False
 
-    if is_2_80:
-        path = file_path.lstrip("//")
-    else:
-        if file_path.startswith("//"):
-            cwd = os.path.dirname(bpy.data.filepath)
-            norm_path = os.path.normpath(file_path.lstrip("//"))
-            abs_image_path = os.path.join(cwd, norm_path)
-            path = abs_image_path
-        else:
-            path = os.path.normpath(file_path)
+    abs_path = bpy.path.abspath(file_path)
 
-    image.save_render(path)
+    image.save_render(abs_path)
 
     s.file_format = fm
     s.color_mode = cm
@@ -338,7 +329,7 @@ def prepare_bake_color(mat, from_socket, new_socket):
                             new_socket = new_node.inputs['Color1']
                             prepare_bake_color(mat, from_socket, new_socket)
 
-        # skip over Afrom_socket, if linked
+        # skip over AO, if linked
         elif node.type == 'AMBIENT_OCCLUSION':
             color = node.inputs['Color'].default_value
             if node.inputs['Color'].is_linked:
@@ -582,8 +573,6 @@ def set_material_outputs_target_to_all(objects):
                         node.target = 'ALL'
 
 
-# TODO:
-
 def get_value_list(node, value_name):
     value_list = []
 
@@ -704,7 +693,7 @@ def get_joblist_manual():
     for job_name, data in bakelist.items():
         if data.do_bake:
             joblist.append(job_name)
-    
+
     # force bake of Color, if user wants alpha in color
     if settings.use_alpha_to_color and settings.color_mode == 'RGBA':
         if 'Color' not in joblist:
@@ -713,3 +702,25 @@ def get_joblist_manual():
             joblist.append('Alpha')
 
     return joblist
+
+
+def check_permission(path):
+    if not path.endswith("\\"):
+        path += "\\"
+
+    tmp_file = os.path.normpath(
+        path + "PBAKER_TEMP_FILE_{}".format(time.time()))
+    try:
+        with open(tmp_file, 'w') as f:
+            pass
+    except PermissionError as e:
+        print("Error: {} {} ".format(e.filename, e.strerror))
+        return False
+
+    try:
+        os.remove(tmp_file)
+    except OSError as e:
+        print("Error: {} {} ".format(e.filename, e.strerror))
+        return False
+
+    return True

@@ -15,7 +15,6 @@ class PBAKER_OT_bake(bpy.types.Operator):
     bl_description = "bake all inputs of a Principled BSDF to image textures"
     bl_options = {'REGISTER', 'UNDO'}
 
-
     def extend_joblist(self, joblist):
         if self.settings.use_Diffuse:
             if "Diffuse" not in joblist:
@@ -29,7 +28,6 @@ class PBAKER_OT_bake(bpy.types.Operator):
         if self.settings.use_material_id:
             if "MatID" not in joblist:
                 joblist.append("MatID")
-
 
     def get_suffix(self, input_name):
         bakelist = bpy.context.scene.principled_baker_bakelist
@@ -391,10 +389,11 @@ class PBAKER_OT_bake(bpy.types.Operator):
         return node
 
     def is_image_file(self, image_file_name):
-        cwd = os.path.dirname(bpy.data.filepath)
-        abs_image_path = os.path.join(cwd, os.path.normpath(
-            self.settings.file_path.lstrip("/").rstrip("\\")), image_file_name)
-        return os.path.isfile(abs_image_path)
+        cwd = os.path.normpath(os.path.dirname(bpy.data.filepath))
+        abs_path = os.path.normpath(self.get_image_file_path(image_file_name))
+        if not os.path.isabs(abs_path):
+            abs_path = os.path.normpath(cwd + abs_path)
+        return os.path.isfile(abs_path)
 
     def get_image_file_name(self, object_name, job_name):
         prefix = self.settings.image_prefix
@@ -406,8 +405,19 @@ class PBAKER_OT_bake(bpy.types.Operator):
         return image_file_name
 
     def get_image_file_path(self, image_file_name):
-        path = self.settings.file_path.rstrip("\\").rstrip("\\")
-        return os.path.join(path, image_file_name)
+        path = self.settings.file_path
+        if path == "//":
+            path += image_file_name
+        else:
+            if path.startswith("//"):
+                path = bpy.path.relpath(path)
+            else:
+                path = os.path.abspath(path)
+                path = bpy.path.abspath(path)
+            if not path.endswith(os.path.sep):
+                path += os.path.sep
+            path += image_file_name
+        return path
 
     def load_image(self, image_file_name):
         if image_file_name in bpy.data.images:
@@ -433,15 +443,6 @@ class PBAKER_OT_bake(bpy.types.Operator):
         name = "{0}{1}.{2}".format(prefix, self.get_suffix(
             job_name), file_format)  # include ending
         path = self.get_image_file_path(name)
-
-        # create dir
-        cwd = os.path.dirname(bpy.data.filepath)
-        abs_path = self.settings.file_path
-        if self.settings.file_path.startswith("//"):
-            abs_path = os.path.join(cwd, os.path.normpath(
-                self.settings.file_path.lstrip("//").rstrip("\\")))
-        if not os.path.exists(abs_path):
-            os.makedirs(abs_path)
 
         # alpha
         alpha = False
@@ -496,7 +497,7 @@ class PBAKER_OT_bake(bpy.types.Operator):
                     return False
             # no UV map?
             if not self.settings.bake_mode == 'SELECTED_TO_ACTIVE':
-                if self.settings.auto_uv_project == 'OFF':  # TODO bug: Selected to Active high poly does not need uv
+                if self.settings.auto_uv_project == 'OFF':
                     if len(obj.data.uv_layers) == 0:
                         self.report(
                             {'INFO'}, "baking cancelled. '{0}' UV map missing.".format(obj.name))
@@ -831,6 +832,31 @@ class PBAKER_OT_bake(bpy.types.Operator):
             if index_uv_layer <= len(obj.data.uv_layers) - 1:
                 uv_layers.active_index = index_uv_layer
 
+    def check_file_path(self):
+        path = self.settings.file_path
+
+        if path in ['', ' ', '/', '///', '\\', '//\\']:
+            self.report(
+                {'ERROR'}, "'{}' not a valid path or no permission".format(path))
+            return False
+
+        if path == "//":
+            cwd = os.path.dirname(bpy.data.filepath)
+            abs_path = os.path.normpath(cwd)
+        else:
+            if path.startswith("//"):
+                path = path[2:]
+            abs_path = bpy.path.abspath(path)
+
+        if not os.path.exists(abs_path):
+            try:
+                os.makedirs(abs_path)
+            except OSError as e:
+                return False
+
+        if check_permission(abs_path):
+            return True
+
     def invoke(self, context, event):
         # 2.79
         if is_2_79:
@@ -851,12 +877,17 @@ class PBAKER_OT_bake(bpy.types.Operator):
             'Emission': [1.0, 1.0, 1.0, 1.0],
         }
 
-        new_images = {}
-
         # File needs to be saved
-        if bpy.data.is_saved == False and self.settings.file_path.startswith("//"):
+        if not bpy.data.is_saved:
             self.report(
-                {'ERROR'}, 'Blendfile needs to be saved to get relative output path')
+                {'ERROR'}, 'Blendfile needs to be saved to get relative output paths')
+            return {'CANCELLED'}
+
+        # Check file path
+        check = self.check_file_path()
+        if not check:
+            self.report({'ERROR'},
+                        "'{}' Permission denied".format(self.settings.file_path))
             return {'CANCELLED'}
 
         # Input error handling
@@ -874,7 +905,6 @@ class PBAKER_OT_bake(bpy.types.Operator):
                 self.report(
                     {'ERROR'}, "Error: Bake pass requires Direct, Indirect, or Color contributions to be enabled.")
                 return {'CANCELLED'}
-
 
         # Temp switch to Cycles - see clean up!
         self.render_engine = bpy.context.scene.render.engine
@@ -906,6 +936,8 @@ class PBAKER_OT_bake(bpy.types.Operator):
             elif self.settings.auto_smooth == 'OFF':
                 for obj in self.selected_objects:
                     obj.data.use_auto_smooth = False
+
+        new_images = {}
 
         bake_objects = []
         bake_objects = get_only_meshes(self.selected_objects)
@@ -950,7 +982,7 @@ class PBAKER_OT_bake(bpy.types.Operator):
                     joblist = get_joblist_from_object(obj)
                 else:
                     joblist = get_joblist_manual()
-                
+
                 self.extend_joblist(joblist)
 
                 if self.settings.use_vertex_color:

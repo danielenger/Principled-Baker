@@ -75,8 +75,12 @@ class PBAKER_PT_panel(bpy.types.Panel):
         # Presets
         row = col_bakelist.row(align=True)
         row.menu(PBAKER_MT_display_presets.__name__, text=PBAKER_MT_display_presets.bl_label)
-        row.operator(PBAKER_AddPresetObjectDisplay.bl_idname, text="", icon='ZOOM_IN')
-        row.operator(PBAKER_AddPresetObjectDisplay.bl_idname, text="", icon='ZOOM_OUT').remove_active = True
+        if is_2_80:
+            row.operator(PBAKER_AddPresetObjectDisplay.bl_idname, text="", icon='ADD')
+            row.operator(PBAKER_AddPresetObjectDisplay.bl_idname, text="", icon='REMOVE').remove_active = True
+        else:
+            row.operator(PBAKER_AddPresetObjectDisplay.bl_idname, text="", icon='ZOOM_IN')
+            row.operator(PBAKER_AddPresetObjectDisplay.bl_idname, text="", icon='ZOOM_OUT').remove_active = True
 
         if settings.use_autodetect:
             col_bakelist.active = False
