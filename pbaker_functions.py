@@ -242,17 +242,6 @@ def save_image_as(image, file_path, file_format, color_mode='RGB', color_depth='
     bpy.context.scene.view_settings.view_transform = vt
 
 
-def prepare_bake_ao(mat, socket, new_socket):
-    node = socket.node
-    if node.type == 'AMBIENT_OCCLUSION':
-        mat.node_tree.links.new(node.outputs['AO'], new_socket)
-    else:
-        for input_socket in node.inputs:
-            if input_socket.is_linked:
-                from_socket = input_socket.links[0].from_socket
-                prepare_bake_ao(mat, from_socket, new_socket)
-
-
 def prepare_bake_factor(mat, socket, new_socket, node_type, factor_name='Fac'):
     node = socket.node
     if node.type == node_type:
@@ -268,74 +257,89 @@ def prepare_bake_factor(mat, socket, new_socket, node_type, factor_name='Fac'):
                     mat, from_socket, new_socket, node_type, factor_name)
 
 
+def prepare_bake_ao(mat, socket, new_socket):
+
+    def is_mixnode_in_node_tree(node):
+        """return True only if mix node is higher in tree"""
+        node_type = 'MIX_RGB'
+        if node.type == node_type:
+            return True
+        elif node.type == 'AMBIENT_OCCLUSION':
+            return False
+        else:
+            for input_socket in node.inputs:
+                if input_socket.is_linked:
+                    from_node = input_socket.links[0].from_node
+                    if is_mixnode_in_node_tree(from_node):
+                        return True
+            return False
+
+    node = socket.node
+
+    if node.type == 'MIX_RGB':
+        if node.inputs[1].is_linked and node.inputs[2].is_linked:
+            from_node_1 = node.inputs[1].links[0].from_node
+            from_node_2 = node.inputs[2].links[0].from_node
+            is_ao_in_1 = is_node_type_in_node_tree(
+                from_node_1, 'AMBIENT_OCCLUSION')
+            is_ao_in_2 = is_node_type_in_node_tree(
+                from_node_2, 'AMBIENT_OCCLUSION')
+            if is_ao_in_1 and is_ao_in_2:
+                from_socket = socket
+                mat.node_tree.links.new(from_socket, new_socket)
+                return
+
+    if is_node_type_in_node_tree(node, 'AMBIENT_OCCLUSION'):
+        if not is_mixnode_in_node_tree(node):
+            if not socket.type == 'SHADER':
+                from_socket = socket
+                mat.node_tree.links.new(from_socket, new_socket)
+            else:
+                for input_socket in node.inputs:
+                    if input_socket.is_linked:
+                        from_socket = input_socket.links[0].from_socket
+                        prepare_bake_ao(mat, from_socket, new_socket)
+        else:
+            for input_socket in node.inputs:
+                if input_socket.is_linked:
+                    from_socket = input_socket.links[0].from_socket
+                    prepare_bake_ao(mat, from_socket, new_socket)
+    else:
+        for input_socket in node.inputs:
+            if input_socket.is_linked:
+                from_socket = input_socket.links[0].from_socket
+                prepare_bake_ao(mat, from_socket, new_socket)
+
+
 def prepare_bake_color(mat, from_socket, new_socket):
     node = from_socket.node
 
-    if not is_node_type_in_node_tree(node, 'AMBIENT_OCCLUSION'):
-        mat.node_tree.links.new(from_socket, new_socket)
-
-    else:
-        if node.type == 'MIX_RGB':
-            color1 = node.inputs['Color1'].default_value
-            color2 = node.inputs['Color2'].default_value
-            fac = node.inputs['Fac'].default_value
-            new_node = new_mixrgb_node(mat, fac, color1, color2)
-            new_node.inputs['Fac'].default_value = node.inputs['Fac'].default_value
-            mat.node_tree.links.new(new_node.outputs[0], new_socket)
-
-            if node.blend_type == 'MIX':
-
-                if node.inputs['Fac'].is_linked:
-                    from_socket = node.inputs['Fac'].links[0].from_socket
-                    new_socket = new_node.inputs['Fac']
-                    mat.node_tree.links.new(from_socket, new_socket)
-
-                if node.inputs['Color1'].is_linked:
-                    from_node = node.inputs['Color1'].links[0].from_node
-                    if from_node.type == 'AMBIENT_OCCLUSION':
-                        new_node.inputs['Color1'].default_value = from_node.inputs['Color'].default_value
-                    from_socket = node.inputs['Color1'].links[0].from_socket
-                    new_socket = new_node.inputs['Color1']
-                    prepare_bake_color(mat, from_socket, new_socket)
-
-                if node.inputs['Color2'].is_linked:
-                    from_node = node.inputs['Color2'].links[0].from_node
-                    if from_node.type == 'AMBIENT_OCCLUSION':
-                        new_node.inputs['Color2'].default_value = from_node.inputs['Color'].default_value
-                    from_socket = node.inputs['Color2'].links[0].from_socket
-                    new_socket = new_node.inputs['Color2']
-                    prepare_bake_color(mat, from_socket, new_socket)
-
-            else:
-
-                if node.inputs['Color1'].is_linked:
-                    from_node = node.inputs['Color1'].links[0].from_node
-                    if from_node.type == 'AMBIENT_OCCLUSION':
-                        new_node.inputs['Fac'].default_value = 1
-                        new_node.inputs['Color1'].default_value = from_node.inputs['Color'].default_value
-                        if node.inputs['Color2'].is_linked:
-                            from_socket = node.inputs['Color2'].links[0].from_socket
-                            new_socket = new_node.inputs['Color2']
-                            prepare_bake_color(mat, from_socket, new_socket)
-
-                if node.inputs['Color2'].is_linked:
-                    from_node = node.inputs['Color2'].links[0].from_node
-                    if from_node.type == 'AMBIENT_OCCLUSION':
-                        new_node.inputs['Fac'].default_value = 0
-                        new_node.inputs['Color2'].default_value = from_node.inputs['Color'].default_value
-                        if node.inputs['Color1'].is_linked:
-                            from_socket = node.inputs['Color1'].links[0].from_socket
-                            new_socket = new_node.inputs['Color1']
-                            prepare_bake_color(mat, from_socket, new_socket)
-
-        # skip over AO, if linked
+    def is_mixnode_in_node_tree(node):
+        """return True only if mix node is higher in tree"""
+        node_type = 'MIX_RGB'
+        if node.type == node_type:
+            return True
         elif node.type == 'AMBIENT_OCCLUSION':
-            color = node.inputs['Color'].default_value
-            if node.inputs['Color'].is_linked:
-                from_socket = node.inputs['Color'].links[0].from_socket
-                prepare_bake_color(mat, from_socket, new_socket)
+            return False
         else:
-            mat.node_tree.links.new(from_socket, new_socket)
+            for input_socket in node.inputs:
+                if input_socket.is_linked:
+                    from_node = input_socket.links[0].from_node
+                    if is_mixnode_in_node_tree(from_node):
+                        return True
+            return False
+
+    # find and unlink AO trees in tagged nodes
+    for node in mat.node_tree.nodes:
+        if node.type == 'MIX_RGB' and NODE_TAG in node.keys():
+            for node_input in node.inputs[1:]:
+                if node_input.is_linked:
+                    from_node = node_input.links[0].from_node
+                    if not is_mixnode_in_node_tree(from_node):
+                        if is_node_type_in_node_tree(from_node, 'AMBIENT_OCCLUSION'):
+                            node_input.default_value = (1, 1, 1, 1)
+                            mat.node_tree.links.remove(node_input.links[0])
+    mat.node_tree.links.new(from_socket, new_socket)
 
 
 def prepare_bake(mat, socket, new_socket, input_socket_name):
@@ -383,7 +387,8 @@ def prepare_bake(mat, socket, new_socket, input_socket_name):
                     else:
                         from_socket = node.inputs[i].links[0].from_socket
                         new_socket = mix_node.inputs[i]
-                    prepare_bake(mat, from_socket, new_socket, input_socket_name)
+                    prepare_bake(mat, from_socket, new_socket,
+                                 input_socket_name)
 
     elif node.type == 'ADD_SHADER' and not input_socket_name == 'Fac':
         mix_node = new_mixrgb_node(mat, 1, color, color)
@@ -417,7 +422,26 @@ def prepare_bake(mat, socket, new_socket, input_socket_name):
         if node.type == 'BSDF_PRINCIPLED' and input_socket_name == 'Color':
             input_socket_name = 'Base Color'
 
-        if input_socket_name in node.inputs.keys():
+        if input_socket_name == 'Ambient Occlusion':
+            # AO: remove all non-ao branches
+            for n in mat.node_tree.nodes:
+                if n.type == 'MIX_RGB' and NODE_TAG in n.keys():
+                    for n_input in n.inputs[1:]:
+                        if n_input.is_linked:
+                            from_n = n_input.links[0].from_node
+                            if not is_node_type_in_node_tree(from_n, 'AMBIENT_OCCLUSION'):
+                                n_input.default_value = (1, 1, 1, 1)
+                                mat.node_tree.links.remove(n_input.links[0])
+            # AO: link ao branch
+            for input_socket in node.inputs:
+                if input_socket.type == 'RGBA':
+                    if input_socket.is_linked:
+                        from_node = input_socket.links[0].from_node
+                        if is_node_type_in_node_tree(from_node, 'AMBIENT_OCCLUSION'):
+                            from_socket = input_socket.links[0].from_socket
+                            mat.node_tree.links.new(from_socket, new_socket)
+
+        elif input_socket_name in node.inputs.keys():
             input_socket = node.inputs[input_socket_name]
 
             if input_socket.type == 'RGBA':
@@ -576,7 +600,7 @@ def get_value_list(node, value_name):
     value_list = []
 
     def find_values(node, value_name):
-        if not node.type == 'NORMAL_MAP':
+        if not node.type in ['NORMAL_MAP', 'AMBIENT_OCCLUSION']:
             if value_name == 'Color' and node.type == 'BSDF_PRINCIPLED':
                 tmp_value_name = 'Base Color'
             else:
@@ -602,6 +626,60 @@ def get_joblist_from_object(obj):
     joblist = []
     settings = bpy.context.scene.principled_baker_settings
 
+    for mat_slot in obj.material_slots:
+        if mat_slot.material:
+            mat = mat_slot.material
+
+            location_list = []
+            for node in mat.node_tree.nodes:
+                location_list.append(node.location.x)
+            loc_most_left = min(location_list)
+            loc_most_right = max(location_list)
+
+            # Deselect all nodes
+            for node in mat.node_tree.nodes:
+                node.select = False
+
+            # Duplicate node tree from active output
+            active_output = get_active_output(mat)
+            select_all_nodes_linked_from(active_output)
+            bpy.ops.node.duplicate(keep_inputs=True)
+
+            # TAG all selected nodes for clean up
+            for node in bpy.context.selected_nodes:
+                node[NODE_TAG] = 1
+
+            # Ungroup all groups in selected nodes
+            selected_nodes = bpy.context.selected_nodes
+            for node in mat.node_tree.nodes:
+                node.select = False
+            for node in selected_nodes:
+                if node.type == 'GROUP':
+                    mat.node_tree.nodes.active = node
+                    bpy.ops.node.group_ungroup()
+                    for node in bpy.context.selected_nodes:
+                        node[NODE_TAG] = 1
+
+            # Deselect all nodes
+            for node in mat.node_tree.nodes:
+                node.select = False
+
+            # move temp nodes in location and put in frame
+            for node in mat.node_tree.nodes:
+                if NODE_TAG in node.keys():
+                    node.location.x += abs(loc_most_left -
+                                           loc_most_right) + 400
+                    node.select = True
+
+            bpy.ops.node.join()
+            p_baker_frame = mat.node_tree.nodes.active
+            p_baker_frame.use_custom_color = True
+            p_baker_frame.color = (1, 0, 0)
+            p_baker_frame[NODE_TAG] = 1
+            p_baker_frame.name = "p_baker_temp_frame"
+            p_baker_frame.label = "PRINCIPLED BAKER NODES (If you see this, something went wrong!)"
+            p_baker_frame.label_size = 64
+
     # add to joblist if values differ
     for value_name in NODE_INPUTS:
         if value_name not in joblist:
@@ -611,9 +689,13 @@ def get_joblist_from_object(obj):
                     if mat_slot.material:
                         mat = mat_slot.material
                         if not MATERIAL_TAG in mat.keys():
-                            material_output = get_active_output(mat)
-                            value_list.extend(get_value_list(
-                                material_output, value_name))
+                            # material_output = get_active_output(mat)
+                            for node in mat.node_tree.nodes:
+                                if node.type == "OUTPUT_MATERIAL" and NODE_TAG in node.keys():
+                                    material_output = node
+                            if material_output:
+                                value_list.extend(get_value_list(
+                                    material_output, value_name))
                 # if len(value_list) >= 1:
                 if value_list:
                     if not is_list_equal(value_list):
@@ -623,58 +705,70 @@ def get_joblist_from_object(obj):
     for mat_slot in obj.material_slots:
         if mat_slot.material:
             if not MATERIAL_TAG in mat_slot.material.keys():
-                # material_output = find_node_by_type(mat_slot.material, 'OUTPUT_MATERIAL')
-                material_output = get_active_output(mat_slot.material)
-                # add special cases:
-                # Alpha node: Transparent
-                if is_node_type_in_node_tree(material_output, 'BSDF_TRANSPARENT'):
-                    if not 'Alpha' in joblist:
-                        joblist.append('Alpha')
+                # material_output = get_active_output(mat_slot.material)
+                for node in mat.node_tree.nodes:
+                    if node.type == "OUTPUT_MATERIAL" and NODE_TAG in node.keys():
+                        material_output = node
 
-                # Alpha for nodes: Translucent, Glass
-                for alpha_name, n_type in ALPHA_NODES.items():
-                    if is_node_type_in_node_tree(material_output, n_type):
-                        if not alpha_name in joblist:
-                            joblist.append(alpha_name)
-                # Emission
-                if is_node_type_in_node_tree(material_output, 'EMISSION'):
-                    if not 'Emission' in joblist:
-                        joblist.append('Emission')
+                if material_output:
+                    # add special cases:
+                    # Alpha node: Transparent
+                    if is_node_type_in_node_tree(material_output, 'BSDF_TRANSPARENT'):
+                        if not 'Alpha' in joblist:
+                            joblist.append('Alpha')
 
-                # AO
-                if is_node_type_in_node_tree(material_output, 'AMBIENT_OCCLUSION'):
-                    if not 'Ambient Occlusion' in joblist:
-                        joblist.append('Ambient Occlusion')
+                    # Alpha for nodes: Translucent, Glass
+                    for alpha_name, n_type in ALPHA_NODES.items():
+                        if is_node_type_in_node_tree(material_output, n_type):
+                            if not alpha_name in joblist:
+                                joblist.append(alpha_name)
+                    # Emission
+                    if is_node_type_in_node_tree(material_output, 'EMISSION'):
+                        if not 'Emission' in joblist:
+                            joblist.append('Emission')
 
-                # Displacement
-                socket_name = 'Displacement'
-                if is_socket_linked_in_node_tree(material_output, socket_name):
-                    # 2.79
-                    if is_2_79:
+                    # AO
+                    if is_node_type_in_node_tree(material_output, 'AMBIENT_OCCLUSION'):
+                        if not 'Ambient Occlusion' in joblist:
+                            joblist.append('Ambient Occlusion')
+
+                    # Displacement
+                    socket_name = 'Displacement'
+                    if is_socket_linked_in_node_tree(material_output, socket_name):
+                        # 2.79
+                        if is_2_79:
+                            if not socket_name in joblist:
+                                joblist.append(socket_name)
+                        # 2.80
+                        else:
+                            if is_node_type_in_node_tree(material_output, 'DISPLACEMENT'):
+                                if not socket_name in joblist:
+                                    joblist.append(socket_name)
+                    # Bump
+                    socket_name = 'Bump'
+                    if settings.use_Bump and is_node_type_in_node_tree(material_output, 'BUMP'):
                         if not socket_name in joblist:
                             joblist.append(socket_name)
-                    # 2.80
-                    else:
-                        if is_node_type_in_node_tree(material_output, 'DISPLACEMENT'):
-                            if not socket_name in joblist:
-                                joblist.append(socket_name)
-                # Bump
-                socket_name = 'Bump'
-                if settings.use_Bump and is_node_type_in_node_tree(material_output, 'BUMP'):
-                    if not socket_name in joblist:
-                        joblist.append(socket_name)
 
-                # add linked inputs to joblist
-                if are_node_types_in_node_tree(material_output, BSDF_NODES):
-                    for socket_name in NODE_INPUTS:
-                        if is_socket_linked_in_node_tree(material_output, socket_name):
-                            if not socket_name in joblist:
-                                joblist.append(socket_name)
+                    # add linked inputs to joblist
+                    if are_node_types_in_node_tree(material_output, BSDF_NODES):
+                        for socket_name in NODE_INPUTS:
+                            if is_socket_linked_in_node_tree(material_output, socket_name):
+                                if not socket_name in joblist:
+                                    joblist.append(socket_name)
 
     # force bake of Color, if user wants alpha in color
     if settings.use_alpha_to_color and settings.color_mode == 'RGBA':
         if not 'Color' in joblist:
             joblist.append('Color')
+
+    # Clean up! - delete temp nodes
+    for mat_slot in obj.material_slots:
+        if mat_slot.material:
+            mat = mat_slot.material
+            for node in mat.node_tree.nodes:
+                node.select = True if NODE_TAG in node.keys() else False
+    bpy.ops.node.delete()
 
     return joblist
 
@@ -728,3 +822,12 @@ def check_permission(path):
         return False
 
     return True
+
+
+def select_all_nodes_linked_from(node):
+    if node:
+        node.select = True
+        for input_socket in node.inputs:
+            if input_socket.is_linked:
+                from_node = input_socket.links[0].from_node
+                select_all_nodes_linked_from(from_node)

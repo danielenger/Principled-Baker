@@ -608,25 +608,72 @@ class PBAKER_OT_bake(bpy.types.Operator):
                         self.prepare_material_for_bake(mat, job_name)
 
     def prepare_material_for_bake(self, mat, job_name):
+
+        location_list = []
+        for node in mat.node_tree.nodes:
+            location_list.append(node.location.x)
+        loc_most_left = min(location_list)
+        loc_most_right = max(location_list)
+
+        # # TODO DEBUG: delete TAGed nodes
+        # for node in mat.node_tree.nodes:
+        #     if NODE_TAG in node.keys():
+        #         node.select = True
+        #     else:
+        #         node.select = False
+        # bpy.ops.node.delete()
+
+        # TODO reenable!!!
         # skip already prepared materials
         for n in mat.node_tree.nodes:
             if NODE_TAG in n.keys():
                 return
 
-        # orig material output
-        material_output = get_active_output(mat)
-        socket_to_surface = material_output.inputs['Surface'].links[0].from_socket
+        # Deselect all nodes
+        for node in mat.node_tree.nodes:
+            node.select = False
+
+        # Duplicate node tree from active output
+        active_output = get_active_output(mat)
+        select_all_nodes_linked_from(active_output)
+        bpy.ops.node.duplicate(keep_inputs=True)
+
+        # TAG all selected nodes for clean up
+        for node in bpy.context.selected_nodes:
+            node[NODE_TAG] = 1
+
+        # Ungroup all groups in selected nodes
+        selected_nodes = bpy.context.selected_nodes
+        for node in mat.node_tree.nodes:
+            node.select = False
+        for node in selected_nodes:
+            if node.type == 'GROUP':
+                mat.node_tree.nodes.active = node
+                bpy.ops.node.group_ungroup()
+                for node in bpy.context.selected_nodes:
+                    node[NODE_TAG] = 1
+
+        # Deselect all nodes
+        for node in mat.node_tree.nodes:
+            node.select = False
 
         # temp nodes
+        for node in mat.node_tree.nodes:
+            if node.type == "OUTPUT_MATERIAL" and NODE_TAG in node.keys():
+                material_output = node
         pb_output_node = self.new_pb_output_node(mat)
-        pb_output_node[NODE_TAG] = 1
         pb_emission_node = self.new_pb_emission_node(mat, [1, 1, 1, 1])
+        pb_output_node.location.x = active_output.location.x
+        pb_emission_node.location.x = active_output.location.x
+
         socket_to_pb_emission_node_color = pb_emission_node.inputs['Color']
 
-        # activate temp output
+        # activate temp output and deactivate others
+        active_output.is_active_output = False
         material_output.is_active_output = False
         pb_output_node.is_active_output = True
 
+        socket_to_surface = material_output.inputs['Surface'].links[0].from_socket
         bake_type = get_bake_type(job_name)
 
         if bake_type == 'EMIT':
@@ -665,8 +712,8 @@ class PBAKER_OT_bake(bpy.types.Operator):
                 prepare_bake(mat, socket_to_surface,
                              socket_to_pb_emission_node_color, 'Height')
             elif job_name == 'Ambient Occlusion':
-                prepare_bake_ao(mat, socket_to_surface,
-                                socket_to_pb_emission_node_color)
+                prepare_bake(mat, socket_to_surface,
+                                socket_to_pb_emission_node_color, 'Ambient Occlusion')
             else:
                 prepare_bake(mat, socket_to_surface,
                              socket_to_pb_emission_node_color, job_name)
@@ -691,6 +738,22 @@ class PBAKER_OT_bake(bpy.types.Operator):
                 pb_emission_node.outputs[0], pb_output_node.inputs['Surface'])
             s = pb_emission_node.inputs['Color'].links[0].from_socket
             mat.node_tree.links.new(s, pb_output_node.inputs['Displacement'])
+
+        # TODO move temp nodes in location and put in frame
+        for node in mat.node_tree.nodes:
+            if NODE_TAG in node.keys():
+                node.location.x += abs(loc_most_left - loc_most_right) + 400
+                node.select = True
+
+        bpy.ops.node.join()
+        p_baker_frame = mat.node_tree.nodes.active
+        p_baker_frame.use_custom_color = True
+        p_baker_frame.color = (1, 0, 0)
+        p_baker_frame[NODE_TAG] = 1
+        p_baker_frame.name = "p_baker_temp_frame"
+        p_baker_frame.label = "PRINCIPLED BAKER NODES (If you see this, something went wrong!)"
+        p_baker_frame.label_size = 64
+
 
     def get_value_list(self, node, value_name):
         value_list = []

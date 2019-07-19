@@ -149,7 +149,7 @@ class PBAKER_BAKELIST_OT_Reset(Operator):
 
 
 class PBAKER_BAKELIST_OT_Disable_All(Operator):
-    """Reset list including suffixes"""
+    """Disable all"""
 
     bl_idname = "principled_baker_bakelist.disable_all"
     bl_label = "Disable All"
