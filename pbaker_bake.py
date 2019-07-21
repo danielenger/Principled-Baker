@@ -615,15 +615,6 @@ class PBAKER_OT_bake(bpy.types.Operator):
         loc_most_left = min(location_list)
         loc_most_right = max(location_list)
 
-        # # TODO DEBUG: delete TAGed nodes
-        # for node in mat.node_tree.nodes:
-        #     if NODE_TAG in node.keys():
-        #         node.select = True
-        #     else:
-        #         node.select = False
-        # bpy.ops.node.delete()
-
-        # TODO reenable!!!
         # skip already prepared materials
         for n in mat.node_tree.nodes:
             if NODE_TAG in n.keys():
@@ -903,21 +894,26 @@ class PBAKER_OT_bake(bpy.types.Operator):
                 {'ERROR'}, "'{}' not a valid path or no permission".format(path))
             return False
 
+        cwd = os.path.dirname(bpy.data.filepath)
         if path == "//":
-            cwd = os.path.dirname(bpy.data.filepath)
             abs_path = os.path.normpath(cwd)
         else:
             if path.startswith("//"):
                 path = path[2:]
-            abs_path = bpy.path.abspath(path)
+            if os.path.isabs(path):
+                abs_path = bpy.path.abspath(path)
+            else:
+                abs_path = bpy.path.abspath(cwd + os.path.sep + path)
 
-        if not os.path.exists(abs_path):
+        os_abs_path = os.path.abspath(abs_path)
+        
+        if not os.path.exists(os_abs_path):
             try:
-                os.makedirs(abs_path)
+                os.makedirs(os_abs_path)
             except OSError as e:
                 return False
 
-        if check_permission(abs_path):
+        if check_permission(os_abs_path):
             return True
 
     def invoke(self, context, event):

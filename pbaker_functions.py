@@ -727,10 +727,11 @@ def get_joblist_from_object(obj):
                         if not 'Emission' in joblist:
                             joblist.append('Emission')
 
-                    # AO
-                    if is_node_type_in_node_tree(material_output, 'AMBIENT_OCCLUSION'):
-                        if not 'Ambient Occlusion' in joblist:
-                            joblist.append('Ambient Occlusion')
+                    # AO - 2.80 only
+                    if is_2_80:
+                        if is_node_type_in_node_tree(material_output, 'AMBIENT_OCCLUSION'):
+                            if not 'Ambient Occlusion' in joblist:
+                                joblist.append('Ambient Occlusion')
 
                     # Displacement
                     socket_name = 'Displacement'
