@@ -186,7 +186,6 @@ def is_node_type_in_node_tree(node, node_type):
                 from_node = input_socket.links[0].from_node
                 if is_node_type_in_node_tree(from_node, node_type):
                     return True
-        return False
 
 
 def are_node_types_in_node_tree(node, node_types):
@@ -381,6 +380,8 @@ def prepare_bake(mat, socket, new_socket, input_socket_name):
                 if settings.use_exclude_transparent_colors:
                     if next_node.type in ALPHA_NODES.values() or next_node.type == 'BSDF_TRANSPARENT':
                         other_i = i % 2 + 1
+                        mix_node.inputs[i].default_value = (0, 0, 0, 0)
+                        mix_node.inputs[other_i].default_value = (1, 1, 1, 0)
                         if node.inputs[other_i].is_linked:
                             from_socket = node.inputs[other_i].links[0].from_socket
                             new_socket = mix_node.inputs[i]
@@ -622,63 +623,64 @@ def get_value_list(node, value_name):
     return value_list
 
 
+def prepare_material_for_bake(material):
+    mat = material
+
+    location_list = []
+    for node in mat.node_tree.nodes:
+        location_list.append(node.location.x)
+    loc_most_left = min(location_list)
+    loc_most_right = max(location_list)
+
+    # Duplicate node tree from active output
+    active_output = get_active_output(mat)
+    selected_nodes = get_all_nodes_linked_from(active_output)
+    selected_nodes = duplicate_nodes(mat, selected_nodes, keep_inputs=True)
+
+    # TAG all selected nodes for clean up
+    for node in selected_nodes:
+        node[NODE_TAG] = 1
+
+    # Ungroup all groups in selected nodes
+    group_nodes = [n for n in selected_nodes if n.type == 'GROUP']
+    selected_nodes = ungroup_nodes(mat, group_nodes)
+
+    # TAG all selected nodes for clean up
+    for node in selected_nodes:
+        node[NODE_TAG] = 1
+
+    # move temp nodes in location and put in frame
+    for node in mat.node_tree.nodes:
+        if NODE_TAG in node.keys():
+            node.location.x += abs(loc_most_left -
+                                   loc_most_right) + 500
+    p_baker_frame = mat.node_tree.nodes.new(type="NodeFrame")
+    for node in mat.node_tree.nodes:
+        if NODE_TAG in node.keys():
+            node.parent = p_baker_frame
+    p_baker_frame.name = "p_baker_temp_frame"
+    p_baker_frame.label = "PRINCIPLED BAKER NODES (If you see this, something went wrong!)"
+    p_baker_frame.use_custom_color = True
+    p_baker_frame.color = (1, 0, 0)
+    p_baker_frame[NODE_TAG] = 1
+    p_baker_frame.label_size = 64
+
+    for node in mat.node_tree.nodes:
+        if NODE_TAG in node.keys() and node.type == "OUTPUT_MATERIAL":
+            new_output = node
+            new_output.is_active_output = True
+    return new_output
+
+
 def get_joblist_from_object(obj):
     joblist = []
     settings = bpy.context.scene.principled_baker_settings
 
+    temp_nodes = []
     for mat_slot in obj.material_slots:
         if mat_slot.material:
             mat = mat_slot.material
-
-            location_list = []
-            for node in mat.node_tree.nodes:
-                location_list.append(node.location.x)
-            loc_most_left = min(location_list)
-            loc_most_right = max(location_list)
-
-            # Deselect all nodes
-            for node in mat.node_tree.nodes:
-                node.select = False
-
-            # Duplicate node tree from active output
-            active_output = get_active_output(mat)
-            select_all_nodes_linked_from(active_output)
-            bpy.ops.node.duplicate(keep_inputs=True)
-
-            # TAG all selected nodes for clean up
-            for node in bpy.context.selected_nodes:
-                node[NODE_TAG] = 1
-
-            # Ungroup all groups in selected nodes
-            selected_nodes = bpy.context.selected_nodes
-            for node in mat.node_tree.nodes:
-                node.select = False
-            for node in selected_nodes:
-                if node.type == 'GROUP':
-                    mat.node_tree.nodes.active = node
-                    bpy.ops.node.group_ungroup()
-                    for node in bpy.context.selected_nodes:
-                        node[NODE_TAG] = 1
-
-            # Deselect all nodes
-            for node in mat.node_tree.nodes:
-                node.select = False
-
-            # move temp nodes in location and put in frame
-            for node in mat.node_tree.nodes:
-                if NODE_TAG in node.keys():
-                    node.location.x += abs(loc_most_left -
-                                           loc_most_right) + 400
-                    node.select = True
-
-            bpy.ops.node.join()
-            p_baker_frame = mat.node_tree.nodes.active
-            p_baker_frame.use_custom_color = True
-            p_baker_frame.color = (1, 0, 0)
-            p_baker_frame[NODE_TAG] = 1
-            p_baker_frame.name = "p_baker_temp_frame"
-            p_baker_frame.label = "PRINCIPLED BAKER NODES (If you see this, something went wrong!)"
-            p_baker_frame.label_size = 64
+            prepare_material_for_bake(mat)
 
     # add to joblist if values differ
     for value_name in NODE_INPUTS:
@@ -690,6 +692,7 @@ def get_joblist_from_object(obj):
                         mat = mat_slot.material
                         if not MATERIAL_TAG in mat.keys():
                             # material_output = get_active_output(mat)
+                            material_output = None
                             for node in mat.node_tree.nodes:
                                 if node.type == "OUTPUT_MATERIAL" and NODE_TAG in node.keys():
                                     material_output = node
@@ -704,12 +707,12 @@ def get_joblist_from_object(obj):
     # search material for jobs
     for mat_slot in obj.material_slots:
         if mat_slot.material:
+            mat = mat_slot.material
             if not MATERIAL_TAG in mat_slot.material.keys():
-                # material_output = get_active_output(mat_slot.material)
+                material_output = None
                 for node in mat.node_tree.nodes:
                     if node.type == "OUTPUT_MATERIAL" and NODE_TAG in node.keys():
                         material_output = node
-
                 if material_output:
                     # add special cases:
                     # Alpha node: Transparent
@@ -766,10 +769,7 @@ def get_joblist_from_object(obj):
     # Clean up! - delete temp nodes
     for mat_slot in obj.material_slots:
         if mat_slot.material:
-            mat = mat_slot.material
-            for node in mat.node_tree.nodes:
-                node.select = True if NODE_TAG in node.keys() else False
-    bpy.ops.node.delete()
+            delete_tagged_nodes(mat_slot.material, NODE_TAG)
 
     return joblist
 
@@ -825,10 +825,207 @@ def check_permission(path):
     return True
 
 
-def select_all_nodes_linked_from(node):
-    if node:
-        node.select = True
-        for input_socket in node.inputs:
-            if input_socket.is_linked:
-                from_node = input_socket.links[0].from_node
-                select_all_nodes_linked_from(from_node)
+def get_all_nodes_linked_from(node):
+    nodes = []
+
+    def linked_from(node):
+        if node:
+            nodes.append(node)
+            for input_socket in node.inputs:
+                if input_socket.is_linked:
+                    from_node = input_socket.links[0].from_node
+                    linked_from(from_node)
+    linked_from(node)
+    return nodes
+
+
+def socket_index(socket):
+    node = socket.node
+    sockets = node.outputs if socket.is_output else node.inputs
+    for i in range(0, len(sockets)):
+        if sockets[i].is_linked:
+            if socket == sockets[i]:
+                return i
+                break
+
+
+def duplicate_node(mat, node, keep_inputs=False):
+
+    node_type = str(type(node)).split('.')[-1][:-2]
+    new_node = mat.node_tree.nodes.new(type=node_type)
+
+    if type(node) is type(new_node):
+        # copy attributes
+        for attr in dir(node):
+            try:
+                a = getattr(node, attr)
+                setattr(new_node, attr, a)
+            except AttributeError as e:
+                pass
+
+        # copy values inputs
+        for i in range(0, len(node.inputs)):
+            try:
+                new_node.inputs[i].default_value = node.inputs[i].default_value
+            except:
+                pass
+
+        # copy values outputs
+        for i in range(0, len(node.outputs)):
+            try:
+                new_node.outputs[i].default_value = node.outputs[i].default_value
+            except:
+                pass
+
+        return new_node
+
+
+def duplicate_nodes(mat, nodes, keep_inputs=False):
+
+    new_nodes = {}
+
+    for node in set(nodes):
+        new_node = duplicate_node(mat, node)
+        new_nodes[node] = new_node
+
+    if keep_inputs:
+        for node, new_node in new_nodes.items():
+            for i in range(0, len(node.inputs)):  # for input in node.inputs:
+                input = node.inputs[i]
+                if input.is_linked:
+                    link = input.links[0]
+                    from_node = link.from_node
+                    to_socket = new_node.inputs[i]
+                    if from_node in new_nodes.keys():
+                        from_socket_index = socket_index(link.from_socket)
+                        from_socket = new_nodes[from_node].outputs[from_socket_index]
+                    else:
+                        from_socket = link.from_socket
+                    mat.node_tree.links.new(from_socket, to_socket)
+
+    return list(new_nodes.values())
+
+
+def ungroup_nodes(mat, group_nodes):
+
+    new_nodes = {}
+    val_nodes = []
+
+    def duplicate_from_input_socket(mat, input_socket, link_to_socket):
+        if not input_socket:
+            return
+        old_node = input_socket.links[0].from_node
+        old_from_socket = input_socket.links[0].from_socket
+        if old_node.type == 'GROUP_INPUT':
+
+            # link
+            index_in = socket_index(old_from_socket)
+            if group_node.inputs[index_in].is_linked:
+                from_socket = group_node.inputs[index_in].links[0].from_socket
+                to_socket = link_to_socket
+                mat.node_tree.links.new(from_socket, to_socket)
+            return
+
+        # create new node or take existing
+        index_out = socket_index(old_from_socket)
+        if old_node in new_nodes.keys():
+            new_node = new_nodes[old_node]
+            # link
+            from_socket = new_node.outputs[index_out]
+            to_socket = link_to_socket
+            mat.node_tree.links.new(from_socket, to_socket)
+            return
+        else:
+            new_node = duplicate_node(mat, old_node)
+            new_nodes[old_node] = new_node
+            # link
+            from_socket = new_node.outputs[index_out]
+            to_socket = link_to_socket
+            mat.node_tree.links.new(from_socket, to_socket)
+
+            for input_socket in old_node.inputs:
+                if input_socket.is_linked:
+                    index_in = socket_index(input_socket)
+                    link_to_socket = new_node.inputs[index_in]
+                    duplicate_from_input_socket(
+                        mat, input_socket, link_to_socket)
+
+    for group_node in group_nodes:
+
+        if group_node.type == 'GROUP':
+
+            # group_input_outputs
+            group_input_nodes = [
+                n for n in group_node.node_tree.nodes if n.type == 'GROUP_INPUT']
+            output_count = len(group_input_nodes[0].outputs)
+            group_input_outputs = [None] * output_count
+            for node in group_input_nodes:
+                for i in range(0, output_count):  # for input in node.inputs:
+                    output = node.outputs[i]
+                    if output.is_linked:
+                        group_input_outputs[i] = output
+
+            # group_output_inputs
+            group_output_nodes = [
+                n for n in group_node.node_tree.nodes if n.type == 'GROUP_OUTPUT']
+            input_count = len(group_output_nodes[0].inputs)
+            group_output_inputs = [None] * input_count
+            for node in group_output_nodes:
+                for i in range(0, input_count):  # for input in node.inputs:
+                    input = node.inputs[i]
+                    if input.is_linked:
+                        group_output_inputs[i] = input
+
+            # new value nodes
+            for index in range(0, output_count):
+                if group_input_outputs[index]:
+                    input = group_node.inputs[index]
+                    if not input.is_linked:
+                        val = group_node.inputs[index].default_value
+                        tmp_node = None
+                        if input.type == 'VALUE':
+                            tmp_node = mat.node_tree.nodes.new(
+                                type="ShaderNodeValue")
+                            tmp_node.outputs[0].default_value = val
+                        elif input.type == 'RGBA':
+                            tmp_node = mat.node_tree.nodes.new(
+                                type="ShaderNodeRGB")
+                            tmp_node.outputs[0].default_value = val
+                        if tmp_node:
+                            val_nodes.append(tmp_node)
+                            from_socket = tmp_node.outputs[0]
+                            to_socket = input
+                            mat.node_tree.links.new(from_socket, to_socket)
+
+            # MAIN DEF
+            for output in group_node.outputs:
+                if output.is_linked:
+                    index = socket_index(output)
+                    input_socket = group_output_inputs[index]
+                    to_sockets = [
+                        link.to_socket for link in group_node.outputs[index].links]
+                    for link_to_socket in to_sockets:
+                        duplicate_from_input_socket(
+                            mat, input_socket, link_to_socket)
+
+            # delete group node
+            mat.node_tree.nodes.remove(group_node)
+
+    # remove non linked value nodes
+    for node in val_nodes:
+        if not node.outputs[0].is_linked:
+            mat.node_tree.nodes.remove(node)
+
+    return list(new_nodes.values()) + val_nodes
+
+
+def delete_tagged_nodes(material, tag):
+    for node in material.node_tree.nodes:
+        if tag in node.keys():
+            material.node_tree.nodes.remove(node)
+
+
+def deactivate_material_outputs(material):
+    for node in material.node_tree.nodes:
+        if node.type == "OUTPUT_MATERIAL":
+            node.is_active_output = False

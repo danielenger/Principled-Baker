@@ -53,12 +53,10 @@ class PBAKER_OT_bake(bpy.types.Operator):
             suffix = suffix.title()
         return suffix
 
-    def delete_tagged_nodes(self, obj, tag):
+    def delete_tagged_nodes(self, obj):
         for mat_slot in obj.material_slots:
             if mat_slot.material:
-                for node in mat_slot.material.node_tree.nodes:
-                    if tag in node.keys():
-                        mat_slot.material.node_tree.nodes.remove(node)
+                delete_tagged_nodes(mat_slot.material, NODE_TAG)
 
     def delete_tagged_materials(self, obj, tag):
         for mat_index in range(0, len(obj.material_slots)):
@@ -67,8 +65,6 @@ class PBAKER_OT_bake(bpy.types.Operator):
                 if tag in mat_slot.material.keys():
                     bpy.context.object.active_material_index = mat_index
                     bpy.ops.object.material_slot_remove({'object': obj})
-
-    # def remove_tag_from_material(self, mat, tag):
 
     def disable_material_outputs(self, obj):
         for mat_slot in obj.material_slots:
@@ -101,6 +97,10 @@ class PBAKER_OT_bake(bpy.types.Operator):
             bake_image_node.color_space = 'COLOR' if image.colorspace_settings.name == 'sRGB' else 'NONE'
         bake_image_node.image = image  # add image to node
         bake_image_node[NODE_TAG] = 1  # tag for clean up
+        bake_image_node.label = "TEMP BAKE NODE (If you see this, something went wrong!)"
+        bake_image_node.use_custom_color = True
+        bake_image_node.color = (1, 0, 0)
+
         # make only bake_image_node active
         bake_image_node.select = True
         mat.node_tree.nodes.active = bake_image_node
@@ -518,7 +518,7 @@ class PBAKER_OT_bake(bpy.types.Operator):
 
     def prepare_objects_for_bake_matid(self, objects):
 
-        def prepare_material(mat, color):
+        def create_temp_nodes(mat, color):
             pb_output_node = self.new_pb_output_node(mat)
             pb_emission_node = self.new_pb_emission_node(mat, color)
             socket_to_pb_emission_node_color = pb_emission_node.inputs['Color']
@@ -550,7 +550,7 @@ class PBAKER_OT_bake(bpy.types.Operator):
                 c.hsv = mat_index/n_materials, self.prefs.mat_id_saturation, self.prefs.mat_id_value
                 color = c.r, c.g, c.b, 1.0
 
-                prepare_material(mat, color)
+                create_temp_nodes(mat, color)
 
         elif self.prefs.mat_id_algorithm == 'NAME':
             for mat in materials:
@@ -561,7 +561,7 @@ class PBAKER_OT_bake(bpy.types.Operator):
                 b = (h >> 16) % 256 / 256
                 color = r, g, b, 1.0
 
-                prepare_material(mat, color)
+                create_temp_nodes(mat, color)
 
     def prepare_objects_for_bake_vertex_color(self, objects):
         for obj in objects:
@@ -570,7 +570,6 @@ class PBAKER_OT_bake(bpy.types.Operator):
                     mat = mat_slot.material
 
                     pb_output_node = self.new_pb_output_node(mat)
-                    # pb_output_node[NODE_TAG] = 1
                     pb_emission_node = self.new_pb_emission_node(mat)
                     socket_to_pb_emission_node_color = pb_emission_node.inputs['Color']
 
@@ -602,47 +601,14 @@ class PBAKER_OT_bake(bpy.types.Operator):
                     mat = mat_slot.material
                     # 2.79 Normal Map
                     if is_2_79 and job_name == "Normal":
-                        self.prepare_material_for_bake(mat, job_name)
+                        self.prepare_material_for_bake_job(mat, job_name)
                     # 2.80
                     if job_name not in ["Emission", "Normal"]:
-                        self.prepare_material_for_bake(mat, job_name)
+                        self.prepare_material_for_bake_job(mat, job_name)
 
-    def prepare_material_for_bake(self, mat, job_name):
+    def prepare_material_for_bake_job(self, mat, job_name):
 
-        location_list = []
-        for node in mat.node_tree.nodes:
-            location_list.append(node.location.x)
-        loc_most_left = min(location_list)
-        loc_most_right = max(location_list)
-
-        # skip already prepared materials
-        for n in mat.node_tree.nodes:
-            if NODE_TAG in n.keys():
-                return
-
-        # Deselect all nodes
-        for node in mat.node_tree.nodes:
-            node.select = False
-
-        # Duplicate node tree from active output
-        active_output = get_active_output(mat)
-        select_all_nodes_linked_from(active_output)
-        bpy.ops.node.duplicate(keep_inputs=True)
-
-        # TAG all selected nodes for clean up
-        for node in bpy.context.selected_nodes:
-            node[NODE_TAG] = 1
-
-        # Ungroup all groups in selected nodes
-        selected_nodes = bpy.context.selected_nodes
-        for node in mat.node_tree.nodes:
-            node.select = False
-        for node in selected_nodes:
-            if node.type == 'GROUP':
-                mat.node_tree.nodes.active = node
-                bpy.ops.node.group_ungroup()
-                for node in bpy.context.selected_nodes:
-                    node[NODE_TAG] = 1
+        active_output = prepare_material_for_bake(mat)
 
         # Deselect all nodes
         for node in mat.node_tree.nodes:
@@ -660,8 +626,7 @@ class PBAKER_OT_bake(bpy.types.Operator):
         socket_to_pb_emission_node_color = pb_emission_node.inputs['Color']
 
         # activate temp output and deactivate others
-        active_output.is_active_output = False
-        material_output.is_active_output = False
+        deactivate_material_outputs(mat)
         pb_output_node.is_active_output = True
 
         socket_to_surface = material_output.inputs['Surface'].links[0].from_socket
@@ -704,7 +669,7 @@ class PBAKER_OT_bake(bpy.types.Operator):
                              socket_to_pb_emission_node_color, 'Height')
             elif job_name == 'Ambient Occlusion':
                 prepare_bake(mat, socket_to_surface,
-                                socket_to_pb_emission_node_color, 'Ambient Occlusion')
+                             socket_to_pb_emission_node_color, 'Ambient Occlusion')
             else:
                 prepare_bake(mat, socket_to_surface,
                              socket_to_pb_emission_node_color, job_name)
@@ -730,21 +695,11 @@ class PBAKER_OT_bake(bpy.types.Operator):
             s = pb_emission_node.inputs['Color'].links[0].from_socket
             mat.node_tree.links.new(s, pb_output_node.inputs['Displacement'])
 
-        # TODO move temp nodes in location and put in frame
+        # put temp nodes in a frame
+        p_baker_frame = mat.node_tree.nodes["p_baker_temp_frame"]
         for node in mat.node_tree.nodes:
             if NODE_TAG in node.keys():
-                node.location.x += abs(loc_most_left - loc_most_right) + 400
-                node.select = True
-
-        bpy.ops.node.join()
-        p_baker_frame = mat.node_tree.nodes.active
-        p_baker_frame.use_custom_color = True
-        p_baker_frame.color = (1, 0, 0)
-        p_baker_frame[NODE_TAG] = 1
-        p_baker_frame.name = "p_baker_temp_frame"
-        p_baker_frame.label = "PRINCIPLED BAKER NODES (If you see this, something went wrong!)"
-        p_baker_frame.label_size = 64
-
+                node.parent = p_baker_frame
 
     def get_value_list(self, node, value_name):
         value_list = []
@@ -906,7 +861,7 @@ class PBAKER_OT_bake(bpy.types.Operator):
                 abs_path = bpy.path.abspath(cwd + os.path.sep + path)
 
         os_abs_path = os.path.abspath(abs_path)
-        
+
         if not os.path.exists(os_abs_path):
             try:
                 os.makedirs(os_abs_path)
@@ -916,6 +871,7 @@ class PBAKER_OT_bake(bpy.types.Operator):
         if check_permission(os_abs_path):
             return True
 
+    # def excecute(self, context):
     def invoke(self, context, event):
         # 2.79
         if is_2_79:
@@ -1134,12 +1090,15 @@ class PBAKER_OT_bake(bpy.types.Operator):
                     # Clean up!
                     # delete temp materials
                     self.delete_tagged_materials(obj, MATERIAL_TAG_VERTEX)
+
                     # delete temp nodes
-                    self.delete_tagged_nodes(obj, NODE_TAG)
+                    self.delete_tagged_nodes(obj)
+
                     # reactivate Material Outputs
                     self.disable_material_outputs(obj)
                     for mat_output in active_outputs:
                         mat_output.is_active_output = True
+
                     # reselect UV Map
                     if not self.settings.set_selected_uv_map:
                         uv_layers = obj.data.uv_textures if is_2_79 else obj.data.uv_layers
@@ -1298,10 +1257,13 @@ class PBAKER_OT_bake(bpy.types.Operator):
                 for obj in bake_objects:
                     # delete temp materials
                     self.delete_tagged_materials(obj, MATERIAL_TAG_VERTEX)
+
                     # delete temp nodes
-                    self.delete_tagged_nodes(obj, NODE_TAG)
+                    self.delete_tagged_nodes(obj)
+
                     # reactivate Material Outputs
                     self.disable_material_outputs(obj)
+
                     # reselect UV Map
                     if not self.settings.set_selected_uv_map:
                         uv_layers = obj.data.uv_textures if is_2_79 else obj.data.uv_layers
@@ -1468,19 +1430,25 @@ class PBAKER_OT_bake(bpy.types.Operator):
                 for obj in bake_objects:
                     # delete temp materials
                     self.delete_tagged_materials(obj, MATERIAL_TAG_VERTEX)
+
                     # delete temp nodes
-                    self.delete_tagged_nodes(obj, NODE_TAG)
+                    self.delete_tagged_nodes(obj)
+
                     # reactivate Material Outputs
                     self.disable_material_outputs(obj)
+
                 # delete temp materials
                 self.delete_tagged_materials(
                     self.active_object, MATERIAL_TAG_VERTEX)
+
                 # delete temp nodes
-                self.delete_tagged_nodes(self.active_object, NODE_TAG)
+                self.delete_tagged_nodes(self.active_object)
+
                 # reactivate Material Outputs
                 self.disable_material_outputs(self.active_object)
                 for mat_output in active_outputs:
                     mat_output.is_active_output = True
+                    
                 # reselect UV Map
                 if not self.settings.set_selected_uv_map:
                     obj = self.active_object

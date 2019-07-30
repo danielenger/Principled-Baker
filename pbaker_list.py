@@ -5,37 +5,72 @@ from bpy.types import Operator, PropertyGroup, UIList
 from .pbaker_functions import *
 
 
-JOBLIST = {
+# 2.79 - OrderedDict
+# TODO throw out with future 2.8+ only verion
+if is_2_79:
+    from collections import OrderedDict
 
-    "Color": "_color",
-    "Metallic": "_metallic",
-    "Roughness": "_roughness",
+    JOBLIST = OrderedDict([
+        ("Color", "_color"),
+        ("Metallic", "_metallic"),
+        ("Roughness", "_roughness"),
 
-    "Normal": "_normal",
-    # "Bump": "_bump",
-    "Displacement": "_disp",
+        ("Normal", "_normal"),
+        #("Bump", "_bump"),
+        ("Displacement", "_disp"),
 
-    "Alpha": "_alpha",
-    "Emission": "_emission",
-    'Ambient Occlusion': "_ao",
+        ("Alpha", "_alpha"),
+        ("Emission", "_emission"),
+        # ('Ambient Occlusion', "_ao"),  # not in 2.79
 
-    "Subsurface": "_subsurface",
-    "Subsurface Radius": "_subsurface_radius",
-    "Subsurface Color": "_subsurface_color",
-    "Specular": "_specular",
-    "Specular Tint": "_specular_tint",
-    "Anisotropic": "_anisotropic",
-    "Anisotropic Rotation": "_anisotropic_rotation",
-    "Sheen": "_sheen",
-    "Sheen Tint": "_sheen_tint",
-    "Clearcoat": "_clearcoat",
-    "Clearcoat Roughness": "_clearcoat_roughness",
-    "IOR": "_ior",
-    "Transmission": "_transmission",
-    "Transmission Roughness": "_transmission_roughness",
-    "Clearcoat Normal": "_clearcoat_normal",
-    "Tangent": "_tangent",
-}
+        ("Subsurface", "_subsurface"),
+        ("Subsurface Radius", "_subsurface_radius"),
+        ("Subsurface Color", "_subsurface_color"),
+        ("Specular", "_specular"),
+        ("Specular Tint", "_specular_tint"),
+        ("Anisotropic", "_anisotropic"),
+        ("Anisotropic Rotation", "_anisotropic_rotation"),
+        ("Sheen", "_sheen"),
+        ("Sheen Tint", "_sheen_tint"),
+        ("Clearcoat", "_clearcoat"),
+        ("Clearcoat Roughness", "_clearcoat_roughness"),
+        ("IOR", "_ior"),
+        ("Transmission", "_transmission"),
+        ("Transmission Roughness", "_transmission_roughness"),
+        ("Clearcoat Normal", "_clearcoat_normal"),
+        ("Tangent", "_tangent")
+    ])
+else:
+    JOBLIST = {
+        "Color": "_color",
+        "Metallic": "_metallic",
+        "Roughness": "_roughness",
+
+        "Normal": "_normal",
+        # "Bump": "_bump",
+        "Displacement": "_disp",
+
+        "Alpha": "_alpha",
+        "Emission": "_emission",
+        'Ambient Occlusion': "_ao",
+
+        "Subsurface": "_subsurface",
+        "Subsurface Radius": "_subsurface_radius",
+        "Subsurface Color": "_subsurface_color",
+        "Specular": "_specular",
+        "Specular Tint": "_specular_tint",
+        "Anisotropic": "_anisotropic",
+        "Anisotropic Rotation": "_anisotropic_rotation",
+        "Sheen": "_sheen",
+        "Sheen Tint": "_sheen_tint",
+        "Clearcoat": "_clearcoat",
+        "Clearcoat Roughness": "_clearcoat_roughness",
+        "IOR": "_ior",
+        "Transmission": "_transmission",
+        "Transmission Roughness": "_transmission_roughness",
+        "Clearcoat Normal": "_clearcoat_normal",
+        "Tangent": "_tangent",
+    }
 
 # JOBLIST_SHORT = {  # TODO
 
@@ -52,12 +87,8 @@ JOBLIST = {
 #     'Ambient Occlusion': "_ao",
 # }
 
-if is_2_79:
-    JOBLIST.pop('Ambient Occlusion')
-
 
 class PBAKER_ListItem(PropertyGroup):
-    # name: StringProperty()
     suffix: StringProperty(name="Suffix")
     do_bake: BoolProperty(
         name="",
@@ -65,8 +96,6 @@ class PBAKER_ListItem(PropertyGroup):
 
 
 class PBAKER_UL_List(UIList):
-    # class MY_UL_List(UIList):
-
     def draw_item(self, context, layout, data, item, icon, active_data,
                   active_propname, index):
 
@@ -77,16 +106,11 @@ class PBAKER_UL_List(UIList):
 
 
 class PBAKER_BAKELIST_OT_Init(Operator):
-    # class LIST_OT_NewItem(Operator):
-
     bl_idname = "principled_baker_bakelist.init"
     bl_label = "Init Bakelist"
 
     def execute(self, context):
         bake_list = context.scene.principled_baker_bakelist
-
-        # settings = context.scene.principled_baker_settings
-        # temp_joblist = JOBLIST_SHORT if settings.use_shortlist else JOBLIST  # TODO
 
         for job_name, suffix in JOBLIST.items():
             item = bake_list.add()
@@ -97,8 +121,6 @@ class PBAKER_BAKELIST_OT_Init(Operator):
 
 
 class PBAKER_BAKELIST_OT_Delete(Operator):
-    # class LIST_OT_DeleteItem(Operator):
-
     bl_idname = "principled_baker_bakelist.delete"
     bl_label = "Delete Bakelist"
 
@@ -159,15 +181,11 @@ class PBAKER_BAKELIST_OT_Disable_All(Operator):
 
         for item_name, item in bakelist.items():
             item.do_bake = False
-            # if item_name in temp_joblist:
-            #     item.do_bake = True
-            # else:
 
         return{'FINISHED'}
 
 
 class PBAKER_BAKELIST_OT_MoveItem_Up(Operator):
-
     bl_idname = "principled_baker_bakelist.move_up"
     bl_label = "Up"
 
@@ -189,7 +207,6 @@ class PBAKER_BAKELIST_OT_MoveItem_Up(Operator):
 
 
 class PBAKER_BAKELIST_OT_MoveItem_Down(Operator):
-
     bl_idname = "principled_baker_bakelist.move_down"
     bl_label = "Down"
 
