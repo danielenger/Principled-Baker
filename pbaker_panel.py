@@ -224,9 +224,12 @@ class PBAKER_PT_AutoUVUnwrap(PBAKER_PT_SubPanel):
             self.layout.label(
                 text="Auto UV unwrap not available in Blender 2.79 for multiple objects.", icon='INFO')
         else:
+
             row = self.layout
             row.prop(self.settings, "auto_uv_project",
                      text="Auto UV Project", expand=True)
+            if not self.settings.auto_uv_project == 'OFF':
+                self.layout.label(text="UV Map will be altered!", icon='ERROR')
             if self.settings.auto_uv_project == 'SMART':
                 col = self.layout
                 col.prop(self.settings, "angle_limit")

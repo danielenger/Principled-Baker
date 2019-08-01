@@ -608,6 +608,11 @@ class PBAKER_OT_bake(bpy.types.Operator):
 
     def prepare_material_for_bake_job(self, mat, job_name):
 
+        # skip already prepared material
+        for node in mat.node_tree.nodes:
+            if NODE_TAG in node.keys():
+                return
+
         active_output = prepare_material_for_bake(mat)
 
         # Deselect all nodes
@@ -1448,7 +1453,7 @@ class PBAKER_OT_bake(bpy.types.Operator):
                 self.disable_material_outputs(self.active_object)
                 for mat_output in active_outputs:
                     mat_output.is_active_output = True
-                    
+
                 # reselect UV Map
                 if not self.settings.set_selected_uv_map:
                     obj = self.active_object

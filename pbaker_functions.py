@@ -849,7 +849,7 @@ def socket_index(socket):
                 break
 
 
-def duplicate_node(mat, node, keep_inputs=False):
+def duplicate_node(mat, node):
 
     node_type = str(type(node)).split('.')[-1][:-2]
     new_node = mat.node_tree.nodes.new(type=node_type)
@@ -997,7 +997,6 @@ def ungroup_nodes(mat, group_nodes):
                             to_socket = input
                             mat.node_tree.links.new(from_socket, to_socket)
 
-            # MAIN DEF
             for output in group_node.outputs:
                 if output.is_linked:
                     index = socket_index(output)
