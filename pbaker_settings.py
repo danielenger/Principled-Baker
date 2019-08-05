@@ -216,6 +216,11 @@ class PBAKER_settings(bpy.types.PropertyGroup):
         default="_diffuse",
         maxlen=1024,
     )
+    suffix_wireframe: StringProperty(
+        name="Wireframe",
+        default="_wireframe",
+        maxlen=1024,
+    )
 
     image_prefix: StringProperty(
         name="Prefix (Texture Name)",
@@ -438,3 +443,19 @@ class PBAKER_settings(bpy.types.PropertyGroup):
     #     name="Short List",
     #     description='Show the most common Bake Types only',
     #     default=False)
+
+    use_wireframe: BoolProperty(
+        name="Wireframe",
+        default=False)
+
+    use_pixel_size: BoolProperty(
+        name="Pixel Size",
+        default=False)
+
+    wireframe_size: FloatProperty(
+        name="Size",
+        default=0.01,
+        min=0.0,
+        # max=100.0,
+        soft_max=100.0
+    )

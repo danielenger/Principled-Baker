@@ -112,6 +112,14 @@ class PBAKER_PT_BakeList(PBAKER_PT_SubPanel):
         row.prop(self.settings, "use_material_id")
         row.prop(self.settings, "suffix_material_id", text="")
 
+        row = col2.split()
+        row.prop(self.settings, "use_wireframe")        
+        row.prop(self.settings, "suffix_wireframe", text="")
+        if self.settings.use_wireframe:
+            wf_row = col2.split()
+            wf_row.prop(self.settings, "wireframe_size")
+            wf_row.prop(self.settings, "use_pixel_size")
+
 
 class PBAKER_PT_OutputSettings(PBAKER_PT_SubPanel):
     bl_parent_id = "PBAKER_PT_Main"

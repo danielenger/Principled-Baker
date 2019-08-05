@@ -123,6 +123,14 @@ class PBAKER_PT_panel(bpy.types.Panel):
         row.prop(settings, "use_material_id")
         row.prop(settings, "suffix_material_id", text="")
 
+        row = col2.split()
+        row.prop(settings, "use_wireframe")        
+        row.prop(settings, "suffix_wireframe", text="")
+        if settings.use_wireframe:
+            wf_row = col2.split()
+            wf_row.prop(settings, "wireframe_size")
+            wf_row.prop(settings, "use_pixel_size")
+
         # output options:
         col = self.layout.box().column(align=True)
         row = col.row()

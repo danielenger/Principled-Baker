@@ -28,6 +28,9 @@ class PBAKER_OT_bake(bpy.types.Operator):
         if self.settings.use_material_id:
             if "MatID" not in joblist:
                 joblist.append("MatID")
+        if self.settings.use_wireframe:
+            if "Wireframe" not in joblist:
+                joblist.append("Wireframe")
 
     def get_suffix(self, input_name):
         bakelist = bpy.context.scene.principled_baker_bakelist
@@ -42,6 +45,8 @@ class PBAKER_OT_bake(bpy.types.Operator):
             suffix = self.settings.suffix_vertex_color
         elif input_name == 'MatID':
             suffix = self.settings.suffix_material_id
+        elif input_name == 'Wireframe':
+            suffix = self.settings.suffix_wireframe
         else:
             suffix = bakelist[input_name]['suffix']
 
@@ -169,6 +174,9 @@ class PBAKER_OT_bake(bpy.types.Operator):
         return n_pri_node_settings
 
     def add_images_to_material(self, new_mat, new_images):
+
+        NOT_TO_LINK_NODES = ["Glossiness", "Ambient Occlusion",
+                             "Vertex_Color", "MatID", "Diffuse", "Wireframe"]
 
         principled_node = find_node_by_type(new_mat, 'BSDF_PRINCIPLED')
         material_output = find_node_by_type(new_mat, 'OUTPUT_MATERIAL')
@@ -369,7 +377,7 @@ class PBAKER_OT_bake(bpy.types.Operator):
                     new_mat.node_tree.links.new(ao_image_node.outputs["Color"],
                                                 mix_node.inputs['Color2'])
 
-            elif name in ["Glossiness", "Ambient Occlusion", "Vertex_Color", "MatID", "Diffuse"]:
+            elif name in NOT_TO_LINK_NODES:
                 pass  # skip some
 
             else:
@@ -574,8 +582,7 @@ class PBAKER_OT_bake(bpy.types.Operator):
                     socket_to_pb_emission_node_color = pb_emission_node.inputs['Color']
 
                     # activate temp output
-                    material_output = get_active_output(
-                        mat)  # orig material output
+                    material_output = get_active_output(mat)
                     if material_output:
                         material_output.is_active_output = False
                     pb_output_node.is_active_output = True
@@ -589,6 +596,37 @@ class PBAKER_OT_bake(bpy.types.Operator):
                     attr_node.attribute_name = active_vert_col
                     mat.node_tree.links.new(
                         attr_node.outputs['Color'], socket_to_pb_emission_node_color)
+
+                    # link pb_emission_node to material_output
+                    mat.node_tree.links.new(
+                        pb_emission_node.outputs[0], pb_output_node.inputs['Surface'])
+
+    def prepare_objects_for_bake_wireframe(self, objects):
+        for obj in objects:
+            for mat_slot in obj.material_slots:
+                if mat_slot.material:
+                    mat = mat_slot.material
+
+                    pb_output_node = self.new_pb_output_node(mat)
+                    pb_emission_node = self.new_pb_emission_node(mat)
+                    socket_to_pb_emission_node_color = pb_emission_node.inputs['Color']
+
+                    # activate temp output
+                    material_output = get_active_output(mat)
+                    if material_output:
+                        material_output.is_active_output = False
+                    pb_output_node.is_active_output = True
+
+                    for name, vert_col in obj.data.vertex_colors.items():
+                        if vert_col.active_render:
+                            active_vert_col = name
+                    wf_node = mat.node_tree.nodes.new(
+                        type='ShaderNodeWireframe')
+                    wf_node[NODE_TAG] = 1  # tag for clean up
+                    wf_node.inputs[0].default_value = self.settings.wireframe_size
+                    wf_node.use_pixel_size = self.settings.use_pixel_size
+                    mat.node_tree.links.new(
+                        wf_node.outputs[0], socket_to_pb_emission_node_color)
 
                     # link pb_emission_node to material_output
                     mat.node_tree.links.new(
@@ -1077,6 +1115,8 @@ class PBAKER_OT_bake(bpy.types.Operator):
                         self.prepare_objects_for_bake_matid(obj_list)
                     elif job_name == 'Vertex_Color':
                         self.prepare_objects_for_bake_vertex_color(obj_list)
+                    elif job_name == 'Wireframe':
+                        self.prepare_objects_for_bake_wireframe(obj_list)
                     elif job_name == 'Diffuse':
                         pass  # prepare nothing
                     else:
@@ -1243,6 +1283,8 @@ class PBAKER_OT_bake(bpy.types.Operator):
                     self.prepare_objects_for_bake_matid(bake_objects)
                 elif job_name == 'Vertex_Color':
                     self.prepare_objects_for_bake_vertex_color(bake_objects)
+                elif job_name == 'Wireframe':
+                    self.prepare_objects_for_bake_wireframe(bake_objects)
                 elif job_name == 'Diffuse':
                     pass  # prepare nothing
                 else:
@@ -1332,6 +1374,14 @@ class PBAKER_OT_bake(bpy.types.Operator):
                 self.final_cleanup()
                 return {'CANCELLED'}
 
+            # Can bake? empty material slot in active object
+            for mat_slot in self.active_object.material_slots:
+                if not mat_slot.material:
+                    self.report(
+                        {'INFO'}, "baking cancelled. '{0}' has empty Material Slots.".format(obj.name))
+                    self.final_cleanup()
+                    return {'CANCELLED'}
+
             # has active object UV map?
             if self.settings.auto_uv_project == 'OFF':
                 if len(self.active_object.data.uv_layers) == 0:
@@ -1417,6 +1467,8 @@ class PBAKER_OT_bake(bpy.types.Operator):
                     self.prepare_objects_for_bake_matid(bake_objects)
                 elif job_name == 'Vertex_Color':
                     self.prepare_objects_for_bake_vertex_color(bake_objects)
+                elif job_name == 'Wireframe':
+                    self.prepare_objects_for_bake_wireframe(bake_objects)
                 elif job_name == 'Diffuse':
                     pass  # prepare nothing
                 else:
