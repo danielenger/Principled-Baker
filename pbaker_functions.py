@@ -863,6 +863,43 @@ def duplicate_node(mat, node):
             except AttributeError as e:
                 pass
 
+        # Color Ramp
+        if node.type == 'VALTORGB':
+            for attr in dir(node.color_ramp):
+                try:
+                    a = getattr(node.color_ramp, attr)
+                    setattr(new_node.color_ramp, attr, a)
+                except AttributeError as e:
+                    pass
+
+            for i in range(0, len(node.color_ramp.elements)):
+                try:
+                    new_node.color_ramp.elements[i].color = node.color_ramp.elements[i].color
+                    new_node.color_ramp.elements[i].position = node.color_ramp.elements[i].position
+                except IndexError as e:
+                    pos = node.color_ramp.elements[i].position
+                    new_elem = new_node.color_ramp.elements.new(pos)
+                    new_elem.color = node.color_ramp.elements[i].color
+
+        # Curve
+        if node.type == 'CURVE_RGB':
+            for attr in dir(node.mapping):
+                try:
+                    a = getattr(node.mapping, attr)
+                    setattr(new_node.mapping, attr, a)
+                except AttributeError as e:
+                    pass
+
+            for i in range(0, len(node.mapping.curves)):
+                for p in range(0, len(node.mapping.curves[i].points)):
+                    try:
+                        new_node.mapping.curves[i].points[p].location = node.mapping.curves[i].points[p].location
+                        new_node.mapping.curves[i].points[p].handle_type = node.mapping.curves[i].points[p].handle_type
+                    except IndexError as e:
+                        pos = node.mapping.curves[i].points[p].location[0]
+                        val = node.mapping.curves[i].points[p].location[1]
+                        new_node.mapping.curves[i].points.new(pos, val)
+
         # copy values inputs
         for i in range(0, len(node.inputs)):
             try:
