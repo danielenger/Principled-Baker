@@ -1051,6 +1051,7 @@ def ungroup_nodes(mat, group_nodes):
     for node in val_nodes:
         if not node.outputs[0].is_linked:
             mat.node_tree.nodes.remove(node)
+            val_nodes.remove(node)
 
     return list(new_nodes.values()) + val_nodes
 
