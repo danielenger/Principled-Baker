@@ -82,6 +82,8 @@ IMAGE_NODE_WIDTH = 300
 PRINCIPLED_BAKER_TEMP_MATERIAL_NAME = "PRINCIPLED_BAKER_TEMP_MATERIAL_{}".format(
     time.time())
 
+NOT_ALLOWED_SIGNS = ['\\', '/', ':', '*', '?', '"', '<', '>', '|']
+
 
 def fill_image(image, color):
     image.pixels[:] = color * image.size[0] * image.size[1]
@@ -1066,3 +1068,9 @@ def deactivate_material_outputs(material):
     for node in material.node_tree.nodes:
         if node.type == "OUTPUT_MATERIAL":
             node.is_active_output = False
+
+
+def remove_not_allowed_signs(str):
+    for s in NOT_ALLOWED_SIGNS:
+        str = str.replace(s, "")
+    return str

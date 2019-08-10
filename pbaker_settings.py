@@ -33,6 +33,10 @@ def color_depth_items(scene, context):
     return items
 
 
+def reset_bake_list(context, value):
+    bpy.ops.principled_baker_bakelist.update()
+
+
 class PBAKER_settings(bpy.types.PropertyGroup):
 
     file_format: EnumProperty(
@@ -137,11 +141,12 @@ class PBAKER_settings(bpy.types.PropertyGroup):
         max=64
     )
 
-    samples: IntProperty(
-        name="Samples",
-        default=128,
-        min=1
-    )
+    # removed. now part of bake list
+    # samples: IntProperty(
+    #     name="Samples",
+    #     default=128,
+    #     min=1
+    # )
 
     use_overwrite: BoolProperty(
         name="Overwrite",
@@ -222,6 +227,32 @@ class PBAKER_settings(bpy.types.PropertyGroup):
         maxlen=1024,
     )
 
+    samples_bump: IntProperty(
+        name="Bump (Height)",
+        default=128,
+        min=1
+    )
+    samples_vertex_color: IntProperty(
+        name="Vertex Color",
+        default=128,
+        min=1
+    )
+    samples_material_id: IntProperty(
+        name="Material ID",
+        default=128,
+        min=1
+    )
+    samples_diffuse: IntProperty(
+        name="Diffuse",
+        default=128,
+        min=1
+    )
+    samples_wireframe: IntProperty(
+        name="Wireframe",
+        default=128,
+        min=1
+    )
+
     image_prefix: StringProperty(
         name="Prefix (Texture Name)",
         description="Object name will be used as prefix, if Prefix not set",
@@ -240,6 +271,12 @@ class PBAKER_settings(bpy.types.PropertyGroup):
         default="//",
         maxlen=1024,
         subtype='DIR_PATH'
+    )
+
+    use_texture_folder: BoolProperty(
+        name="Texture Folder",
+        description="Create a texture directory per object named by (active) object",
+        default=False
     )
 
     use_batch: BoolProperty(
@@ -439,10 +476,12 @@ class PBAKER_settings(bpy.types.PropertyGroup):
     #     description='',
     #     default=False)
 
-    # use_shortlist: BoolProperty(  # TODO short list
-    #     name="Short List",
-    #     description='Show the most common Bake Types only',
-    #     default=False)
+    use_shortlist: BoolProperty(  # TODO short list
+        name="Short List",
+        description='Show the most common Bake Types only',
+        default=False,
+        update=reset_bake_list,
+    )
 
     use_wireframe: BoolProperty(
         name="Wireframe",

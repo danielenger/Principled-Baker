@@ -1,98 +1,106 @@
 import bpy
-from bpy.props import BoolProperty, StringProperty
+from bpy.props import BoolProperty, EnumProperty, IntProperty, StringProperty
 from bpy.types import Operator, PropertyGroup, UIList
 
 from .pbaker_functions import *
 
 
-# 2.79 - OrderedDict
-# TODO throw out with future 2.8+ only verion
-if is_2_79:
-    from collections import OrderedDict
+DEFAULT_SAMPLES = 128
 
-    JOBLIST = OrderedDict([
-        ("Color", "_color"),
-        ("Metallic", "_metallic"),
-        ("Roughness", "_roughness"),
+JOBLIST = [
+    "Color",
+    "Metallic",
+    "Roughness",
 
-        ("Normal", "_normal"),
-        #("Bump", "_bump"),
-        ("Displacement", "_disp"),
+    "Normal",
+    # "Bump",
+    "Displacement",
 
-        ("Alpha", "_alpha"),
-        ("Emission", "_emission"),
-        # ('Ambient Occlusion', "_ao"),  # not in 2.79
+    "Alpha",
+    "Emission",
+    'Ambient Occlusion',
 
-        ("Subsurface", "_subsurface"),
-        ("Subsurface Radius", "_subsurface_radius"),
-        ("Subsurface Color", "_subsurface_color"),
-        ("Specular", "_specular"),
-        ("Specular Tint", "_specular_tint"),
-        ("Anisotropic", "_anisotropic"),
-        ("Anisotropic Rotation", "_anisotropic_rotation"),
-        ("Sheen", "_sheen"),
-        ("Sheen Tint", "_sheen_tint"),
-        ("Clearcoat", "_clearcoat"),
-        ("Clearcoat Roughness", "_clearcoat_roughness"),
-        ("IOR", "_ior"),
-        ("Transmission", "_transmission"),
-        ("Transmission Roughness", "_transmission_roughness"),
-        ("Clearcoat Normal", "_clearcoat_normal"),
-        ("Tangent", "_tangent")
-    ])
-else:
-    JOBLIST = {
-        "Color": "_color",
-        "Metallic": "_metallic",
-        "Roughness": "_roughness",
+    "Subsurface",
+    "Subsurface Radius",
+    "Subsurface Color",
+    "Specular",
+    "Specular Tint",
+    "Anisotropic",
+    "Anisotropic Rotation",
+    "Sheen",
+    "Sheen Tint",
+    "Clearcoat",
+    "Clearcoat Roughness",
+    "IOR",
+    "Transmission",
+    "Transmission Roughness",
+    "Clearcoat Normal",
+    "Tangent",
+]
 
-        "Normal": "_normal",
-        # "Bump": "_bump",
-        "Displacement": "_disp",
+JOBLIST_SHORT = [
+    "Color",
+    "Metallic",
+    "Roughness",
+    "Normal",
+    "Displacement",
+    "Alpha",
+    "Emission",
+    'Ambient Occlusion',
+]
 
-        "Alpha": "_alpha",
-        "Emission": "_emission",
-        'Ambient Occlusion': "_ao",
+# temp store for values in bake list to toggle short/long bake list
+temp_bakelist = {}
 
-        "Subsurface": "_subsurface",
-        "Subsurface Radius": "_subsurface_radius",
-        "Subsurface Color": "_subsurface_color",
-        "Specular": "_specular",
-        "Specular Tint": "_specular_tint",
-        "Anisotropic": "_anisotropic",
-        "Anisotropic Rotation": "_anisotropic_rotation",
-        "Sheen": "_sheen",
-        "Sheen Tint": "_sheen_tint",
-        "Clearcoat": "_clearcoat",
-        "Clearcoat Roughness": "_clearcoat_roughness",
-        "IOR": "_ior",
-        "Transmission": "_transmission",
-        "Transmission Roughness": "_transmission_roughness",
-        "Clearcoat Normal": "_clearcoat_normal",
-        "Tangent": "_tangent",
-    }
 
-# JOBLIST_SHORT = {  # TODO
+def color_mode_items(item, context):
+    if bpy.context.scene.principled_baker_settings.file_format in ['PNG', 'TARGA', 'TIFF', 'OPEN_EXR']:
+        items = [
+            ('RGB', "RGB", ""),
+            ('RGBA', "RGBA", ""),
+        ]
+    else:
+        items = [
+            ('RGB', "RGB", ""),
+            ('BW', "BW", ""),
+        ]
+    return items
 
-#     "Color": "_color",
-#     "Metallic": "_metallic",
-#     "Roughness": "_roughness",
 
-#     "Normal": "_normal",
-#     "Bump": "_bump",
-#     "Displacement": "_disp",
-
-#     "Alpha": "_alpha",
-#     "Emission": "_emission",
-#     'Ambient Occlusion': "_ao",
-# }
+def color_depth_items(scene, context):
+    if bpy.context.scene.principled_baker_settings.file_format == 'OPEN_EXR':
+        items = [
+            ('16', "Float (Half)", ""),
+            ('32', "Float (Full)", "")
+        ]
+    else:
+        items = [
+            ('8', "8", ""),
+            ('16', "16", ""),
+        ]
+    return items
 
 
 class PBAKER_ListItem(PropertyGroup):
-    suffix: StringProperty(name="Suffix")
     do_bake: BoolProperty(
         name="",
-        default=False)
+        default=False
+    )
+    color_mode: EnumProperty(
+        name="Color Mode",
+        description="Color Mode",
+        items=color_mode_items
+    )
+    color_depth: EnumProperty(
+        name="Color Depth",
+        description="Color Depth",
+        items=color_depth_items
+    )
+    samples: IntProperty(
+        name="Samples",
+        default=128,
+        min=1
+    )
 
 
 class PBAKER_UL_List(UIList):
@@ -102,7 +110,11 @@ class PBAKER_UL_List(UIList):
         if self.layout_type in {'DEFAULT', 'COMPACT'}:
             layout.prop(item, "do_bake")
             layout.label(text=item.name)
-            layout.prop(item, "suffix", text="")
+            layout.prop(item, "samples", text="")
+
+            # TODO expand bake list
+            # layout.prop(item, "color_mode", expand=True)
+            # layout.prop(item, "color_depth", expand=True)
 
 
 class PBAKER_BAKELIST_OT_Init(Operator):
@@ -112,10 +124,16 @@ class PBAKER_BAKELIST_OT_Init(Operator):
     def execute(self, context):
         bake_list = context.scene.principled_baker_bakelist
 
-        for job_name, suffix in JOBLIST.items():
-            item = bake_list.add()
-            item.name = job_name
-            item.suffix = suffix
+        if not len(bake_list):
+            for job_name in JOBLIST:
+                if bpy.context.scene.principled_baker_settings.use_shortlist:
+                    if job_name in JOBLIST_SHORT:
+                        item = bake_list.add()
+                        item.name = job_name
+                else:
+                    item = bake_list.add()
+                    item.name = job_name
+                    item.samples = DEFAULT_SAMPLES
 
         return{'FINISHED'}
 
@@ -134,14 +152,38 @@ class PBAKER_BAKELIST_OT_Delete(Operator):
 
 
 class PBAKER_BAKELIST_OT_Update(Operator):
-    """Detect Bake Types from Selected Objects"""
+    """Update Bake List"""
 
     bl_idname = "principled_baker_bakelist.update"
     bl_label = "Update Bakelist"
 
     def execute(self, context):
+
+        bakelist = context.scene.principled_baker_bakelist
+
+        for item_name, item in bakelist.items():
+            temp_bakelist[item_name] = (item.do_bake, item.samples)
+
+        bpy.ops.principled_baker_bakelist.reset()
+
+        for item_name, item in bakelist.items():
+            item.do_bake = temp_bakelist[item_name][0]
+            item.samples = temp_bakelist[item_name][1]
+
+        return{'FINISHED'}
+
+
+class PBAKER_BAKELIST_OT_Detect(Operator):
+    """Detect Bake Types from Selected Objects"""
+
+    bl_idname = "principled_baker_bakelist.detect"
+    bl_label = "Update Bakelist"
+
+    def execute(self, context):
         if not context.scene.principled_baker_bakelist:
             bpy.ops.principled_baker_bakelist.init()
+        # else:
+        #     bpy.ops.principled_baker_bakelist.reset()
 
         bakelist = context.scene.principled_baker_bakelist
 
@@ -157,7 +199,7 @@ class PBAKER_BAKELIST_OT_Update(Operator):
 
 
 class PBAKER_BAKELIST_OT_Reset(Operator):
-    """Reset list including suffixes"""
+    """Reset list"""
 
     bl_idname = "principled_baker_bakelist.reset"
     bl_label = "Update Bakelist"

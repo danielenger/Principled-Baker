@@ -26,30 +26,15 @@ class PBAKER_OT_bake(bpy.types.Operator):
             if "Bump" not in joblist:
                 joblist.append("Bump")
         if self.settings.use_material_id:
-            if "MatID" not in joblist:
-                joblist.append("MatID")
+            if "Material ID" not in joblist:
+                joblist.append("Material ID")
         if self.settings.use_wireframe:
             if "Wireframe" not in joblist:
                 joblist.append("Wireframe")
 
     def get_suffix(self, input_name):
-        bakelist = bpy.context.scene.principled_baker_bakelist
-
-        if input_name == 'Diffuse':
-            suffix = self.settings.suffix_diffuse
-        elif input_name == 'Glossiness':
-            suffix = self.settings.suffix_glossiness
-        elif input_name == 'Bump':
-            suffix = self.settings.suffix_bump
-        elif input_name == 'Vertex_Color':
-            suffix = self.settings.suffix_vertex_color
-        elif input_name == 'MatID':
-            suffix = self.settings.suffix_material_id
-        elif input_name == 'Wireframe':
-            suffix = self.settings.suffix_wireframe
-        else:
-            suffix = bakelist[input_name]['suffix']
-
+        suffixlist = bpy.context.scene.principled_baker_suffixlist
+        suffix = suffixlist[input_name]['suffix']
         if self.settings.suffix_text_mod == 'lower':
             suffix = suffix.lower()
         elif self.settings.suffix_text_mod == 'upper':
@@ -57,6 +42,25 @@ class PBAKER_OT_bake(bpy.types.Operator):
         elif self.settings.suffix_text_mod == 'title':
             suffix = suffix.title()
         return suffix
+
+    def set_samples(self, job_name):
+        bakelist = bpy.context.scene.principled_baker_bakelist
+        if job_name in bakelist.keys():
+            samples = bakelist[job_name].samples
+        else:
+            if job_name == "Diffuse":
+                samples = self.settings.samples_diffuse
+            elif job_name == "Bump":
+                samples = self.settings.samples_bump
+            elif job_name == "Vertex Color":
+                samples = self.settings.samples_vertex_color
+            elif job_name == "Material ID":
+                samples = self.settings.samples_material_id
+            elif job_name == "Wireframe":
+                samples = self.settings.samples_wireframe
+            else:
+                samples = 128  # default
+        bpy.context.scene.cycles.samples = samples
 
     def delete_tagged_nodes(self, obj):
         for mat_slot in obj.material_slots:
@@ -176,7 +180,7 @@ class PBAKER_OT_bake(bpy.types.Operator):
     def add_images_to_material(self, new_mat, new_images):
 
         NOT_TO_LINK_NODES = ["Glossiness", "Ambient Occlusion",
-                             "Vertex_Color", "MatID", "Diffuse", "Wireframe"]
+                             "Vertex Color", "Material ID", "Diffuse", "Wireframe"]
 
         principled_node = find_node_by_type(new_mat, 'BSDF_PRINCIPLED')
         material_output = find_node_by_type(new_mat, 'OUTPUT_MATERIAL')
@@ -406,6 +410,7 @@ class PBAKER_OT_bake(bpy.types.Operator):
     def get_image_file_name(self, object_name, job_name):
         prefix = self.settings.image_prefix
         if prefix == "" or len(self.selected_objects) > 1 or self.settings.use_object_name:
+            object_name = remove_not_allowed_signs(object_name)
             prefix = self.settings.image_prefix + object_name
         image_file_format = IMAGE_FILE_FORMAT_ENDINGS[self.settings.file_format]
         image_file_name = "{0}{1}.{2}".format(
@@ -413,7 +418,12 @@ class PBAKER_OT_bake(bpy.types.Operator):
         return image_file_name
 
     def get_image_file_path(self, image_file_name):
+        image_file_name = remove_not_allowed_signs(image_file_name)
+
         path = self.settings.file_path
+        if self.settings.use_texture_folder:
+            path = os.path.join(path, self.texture_folder)
+
         if path == "//":
             path += image_file_name
         else:
@@ -436,6 +446,7 @@ class PBAKER_OT_bake(bpy.types.Operator):
         return image
 
     def new_bake_image(self, object_name, job_name):
+        object_name = remove_not_allowed_signs(object_name)
         if self.settings.bake_mode == 'BATCH':
             prefix = self.settings.image_prefix + object_name
         else:
@@ -832,9 +843,6 @@ class PBAKER_OT_bake(bpy.types.Operator):
             image.reload()
 
     def bake(self, bake_type, selected_to_active=False):
-        org_samples = bpy.context.scene.cycles.samples
-        bpy.context.scene.cycles.samples = self.settings.samples
-
         pass_filter = []
         if self.settings.use_Diffuse:
             if self.render_settings.use_pass_direct:
@@ -853,7 +861,6 @@ class PBAKER_OT_bake(bpy.types.Operator):
             normal_r=self.render_settings.normal_r,
             normal_g=self.render_settings.normal_g,
             normal_b=self.render_settings.normal_b, )
-        bpy.context.scene.cycles.samples = org_samples
 
     def final_cleanup(self):
         # Auto Smooth - Clean up!
@@ -870,6 +877,9 @@ class PBAKER_OT_bake(bpy.types.Operator):
             bpy.context.scene.render.engine = self.render_engine
             bpy.context.scene.cycles.preview_pause = self.preview_pause
 
+        # Samples
+        bpy.context.scene.cycles.samples = self.org_samples
+
     def select_uv_map(self, obj):
         # 2.79/2.80
         uv_layers = obj.data.uv_textures if is_2_79 else obj.data.uv_layers
@@ -885,6 +895,9 @@ class PBAKER_OT_bake(bpy.types.Operator):
                 uv_layers.active_index = index_uv_layer
 
     def check_file_path(self):
+        for s in [':', '*', '?', '"', '<', '>', '|']:
+            self.settings.file_path = self.settings.file_path.replace(s, "")
+
         path = self.settings.file_path
 
         if path in ['', ' ', '/', '///', '\\', '//\\']:
@@ -914,7 +927,31 @@ class PBAKER_OT_bake(bpy.types.Operator):
         if check_permission(os_abs_path):
             return True
 
+    def set_texture_folder(self, obj_name):
+        self.texture_folder = remove_not_allowed_signs(obj_name)
+
+        path = os.path.join(self.settings.file_path, self.texture_folder)
+
+        cwd = os.path.dirname(bpy.data.filepath)
+        if path == "//":
+            abs_path = os.path.normpath(cwd)
+        else:
+            if path.startswith("//"):
+                path = path[2:]
+            if os.path.isabs(path):
+                abs_path = bpy.path.abspath(path)
+            else:
+                abs_path = bpy.path.abspath(cwd + os.path.sep + path)
+
+        os_abs_path = os.path.abspath(abs_path)
+        if not os.path.exists(os_abs_path):
+            try:
+                os.makedirs(os_abs_path)
+            except OSError as e:
+                return False
+
     # def excecute(self, context):
+
     def invoke(self, context, event):
         # 2.79
         if is_2_79:
@@ -927,6 +964,7 @@ class PBAKER_OT_bake(bpy.types.Operator):
         self.render_settings = context.scene.render.bake
         self.active_object = context.active_object
         self.selected_objects = bpy.context.selected_objects
+        self.texture_folder = ""
 
         self.new_node_colors = {
             "Alpha": [1.0, 1.0, 1.0, 1.0],
@@ -977,6 +1015,10 @@ class PBAKER_OT_bake(bpy.types.Operator):
                 bpy.context.scene.render.engine))
             return {'CANCELLED'}
 
+        # Init Suffix List, if not existing
+        if not len(bpy.context.scene.principled_baker_suffixlist):
+            bpy.ops.principled_baker_suffixlist.init()
+
         # Select only meshes
         self.orig_selected_objects = bpy.context.selected_objects
         for obj in self.selected_objects:
@@ -994,6 +1036,9 @@ class PBAKER_OT_bake(bpy.types.Operator):
             elif self.settings.auto_smooth == 'OFF':
                 for obj in self.selected_objects:
                     obj.data.use_auto_smooth = False
+
+        # Samples - See clean up!
+        self.org_samples = bpy.context.scene.cycles.samples
 
         new_images = {}
 
@@ -1045,8 +1090,8 @@ class PBAKER_OT_bake(bpy.types.Operator):
 
                 if self.settings.use_vertex_color:
                     if len(obj.data.vertex_colors) > 0:
-                        if "Vertex_Color" not in joblist:
-                            joblist.append("Vertex_Color")
+                        if "Vertex Color" not in joblist:
+                            joblist.append("Vertex Color")
                     else:
                         self.report(
                             {'INFO'}, "Vertex Color baking skipped. '{0}' has no Vertex Color".format(obj.name))
@@ -1083,6 +1128,9 @@ class PBAKER_OT_bake(bpy.types.Operator):
                     new_mat_name = obj.name if self.settings.new_material_prefix == "" else self.settings.new_material_prefix
                     new_mat = self.new_material(new_mat_name)
 
+                # texture folder
+                self.set_texture_folder(obj.name)
+
                 # Go through joblist
                 for job_name in joblist:
 
@@ -1099,6 +1147,10 @@ class PBAKER_OT_bake(bpy.types.Operator):
                         continue  # skip job
 
                     # else: do bake
+
+                    # set individual samples
+                    self.set_samples(job_name)
+
                     # image to bake on
                     image = self.new_bake_image(obj.name, job_name)
 
@@ -1111,9 +1163,9 @@ class PBAKER_OT_bake(bpy.types.Operator):
                             add_temp_material(obj)
 
                     # Prepare materials
-                    if job_name == 'MatID':
+                    if job_name == 'Material ID':
                         self.prepare_objects_for_bake_matid(obj_list)
-                    elif job_name == 'Vertex_Color':
+                    elif job_name == 'Vertex Color':
                         self.prepare_objects_for_bake_vertex_color(obj_list)
                     elif job_name == 'Wireframe':
                         self.prepare_objects_for_bake_wireframe(obj_list)
@@ -1210,8 +1262,8 @@ class PBAKER_OT_bake(bpy.types.Operator):
             self.extend_joblist(joblist)
 
             if self.settings.use_vertex_color:
-                if "Vertex_Color" not in joblist:
-                    joblist.append("Vertex_Color")
+                if "Vertex Color" not in joblist:
+                    joblist.append("Vertex Color")
 
             # empty joblist -> nothing to do
             if not joblist:
@@ -1250,6 +1302,9 @@ class PBAKER_OT_bake(bpy.types.Operator):
                 new_mat_name = self.active_object.name if self.settings.new_material_prefix == "" else self.settings.new_material_prefix
                 new_mat = self.new_material(new_mat_name)
 
+            # texture folder
+            self.set_texture_folder(self.active_object.name)
+
             # Go through joblist
             for job_name in joblist:
 
@@ -1266,6 +1321,10 @@ class PBAKER_OT_bake(bpy.types.Operator):
                     continue  # skip job
 
                 # else: do bake
+
+                # set individual samples
+                self.set_samples(job_name)
+
                 # image to bake on
                 image = self.new_bake_image(self.active_object.name, job_name)
 
@@ -1279,9 +1338,9 @@ class PBAKER_OT_bake(bpy.types.Operator):
                             add_temp_material(obj)
 
                 # Prepare materials
-                if job_name == 'MatID':
+                if job_name == 'Material ID':
                     self.prepare_objects_for_bake_matid(bake_objects)
-                elif job_name == 'Vertex_Color':
+                elif job_name == 'Vertex Color':
                     self.prepare_objects_for_bake_vertex_color(bake_objects)
                 elif job_name == 'Wireframe':
                     self.prepare_objects_for_bake_wireframe(bake_objects)
@@ -1400,8 +1459,8 @@ class PBAKER_OT_bake(bpy.types.Operator):
             self.extend_joblist(joblist)
 
             if self.settings.use_vertex_color:
-                if "Vertex_Color" not in joblist:
-                    joblist.append("Vertex_Color")
+                if "Vertex Color" not in joblist:
+                    joblist.append("Vertex Color")
 
             # empty joblist -> nothing to do
             if not joblist:
@@ -1434,6 +1493,9 @@ class PBAKER_OT_bake(bpy.types.Operator):
             new_mat = self.new_material(new_mat_name)
             self.active_object.data.materials.append(new_mat)
 
+            # texture folder
+            self.set_texture_folder(self.active_object.name)
+
             # Go through joblist
             for job_name in joblist:
 
@@ -1450,6 +1512,10 @@ class PBAKER_OT_bake(bpy.types.Operator):
                     continue  # skip job
 
                 # else: do bake
+
+                # set individual samples
+                self.set_samples(job_name)
+
                 # image to bake on
                 image = self.new_bake_image(self.active_object.name, job_name)
 
@@ -1463,9 +1529,9 @@ class PBAKER_OT_bake(bpy.types.Operator):
                             add_temp_material(obj)
 
                 # Prepare materials
-                if job_name == 'MatID':
+                if job_name == 'Material ID':
                     self.prepare_objects_for_bake_matid(bake_objects)
-                elif job_name == 'Vertex_Color':
+                elif job_name == 'Vertex Color':
                     self.prepare_objects_for_bake_vertex_color(bake_objects)
                 elif job_name == 'Wireframe':
                     self.prepare_objects_for_bake_wireframe(bake_objects)

@@ -37,14 +37,17 @@ class PBAKER_PT_BakeList(PBAKER_PT_SubPanel):
                                    context.scene, "principled_baker_bakelist_index")
 
         row = col_bakelist.row(align=True)
-        row.operator('principled_baker_bakelist.update',
+        init_blist = row.row()
+        init_blist.operator('principled_baker_bakelist.init',
+                            text='Create')
+        if len(bpy.context.scene.principled_baker_bakelist):
+            init_blist.active = False
+        row.separator()
+        row.operator('principled_baker_bakelist.detect',
                      text='Detect')
         row.separator()
         row.operator('principled_baker_bakelist.disable_all',
                      text='Disable All')
-        row.separator()
-        row.operator('principled_baker_bakelist.reset',
-                     text='Reset')
         row.separator()
         row.operator('principled_baker_bakelist.move_up',
                      text="", icon='TRIA_UP')
@@ -52,9 +55,9 @@ class PBAKER_PT_BakeList(PBAKER_PT_SubPanel):
                      text="", icon='TRIA_DOWN')
         # row.operator('principled_baker_bakelist.delete', text='Delete')  # TODO debug only?
 
-        # TODO short list
-        # row.separator()
-        # row.prop(self.settings, "use_shortlist", toggle=True)
+        # short list
+        row.separator()
+        row.prop(self.settings, "use_shortlist")
 
         # Presets
         row = col_bakelist.row(align=True)
@@ -81,7 +84,8 @@ class PBAKER_PT_BakeList(PBAKER_PT_SubPanel):
         col1 = col.column(align=True)
         row = col1.split()
         row.prop(self.settings, "use_Diffuse")
-        row.prop(self.settings, "suffix_diffuse", text="")
+        # row.prop(self.settings, "suffix_diffuse", text="")
+        row.prop(self.settings, "samples_diffuse", text="")
         row_diff = col.row(align=True)
         if self.settings.use_Diffuse:
             row_diff.prop(self.render_settings, "use_pass_direct",
@@ -98,23 +102,27 @@ class PBAKER_PT_BakeList(PBAKER_PT_SubPanel):
 
         row = col2.split()
         row.prop(self.settings, "use_invert_roughness")
-        row.prop(self.settings, "suffix_glossiness", text="")
+        # row.prop(self.settings, "suffix_glossiness", text="")
 
         row = col2.split()
         row.prop(self.settings, "use_Bump")
-        row.prop(self.settings, "suffix_bump", text="")
+        # row.prop(self.settings, "suffix_bump", text="")
+        row.prop(self.settings, "samples_bump", text="")
 
         row = col2.split()
         row.prop(self.settings, "use_vertex_color")
-        row.prop(self.settings, "suffix_vertex_color", text="")
+        # row.prop(self.settings, "suffix_vertex_color", text="")
+        row.prop(self.settings, "samples_vertex_color", text="")
 
         row = col2.split()
         row.prop(self.settings, "use_material_id")
-        row.prop(self.settings, "suffix_material_id", text="")
+        # row.prop(self.settings, "suffix_material_id", text="")
+        row.prop(self.settings, "samples_material_id", text="")
 
         row = col2.split()
-        row.prop(self.settings, "use_wireframe")        
-        row.prop(self.settings, "suffix_wireframe", text="")
+        row.prop(self.settings, "use_wireframe")
+        # row.prop(self.settings, "suffix_wireframe", text="")
+        row.prop(self.settings, "samples_wireframe", text="")
         if self.settings.use_wireframe:
             wf_row = col2.split()
             wf_row.prop(self.settings, "wireframe_size")
@@ -135,6 +143,7 @@ class PBAKER_PT_OutputSettings(PBAKER_PT_SubPanel):
         col.separator()
         col.prop(self.settings, "file_path")
         col.prop(self.settings, "use_overwrite")
+        col.prop(self.settings, "use_texture_folder")
 
         col.separator()
 
@@ -159,7 +168,7 @@ class PBAKER_PT_OutputSettings(PBAKER_PT_SubPanel):
             col.prop(self.settings, "quality", text="Quality")
 
         col.separator()
-        col.prop(self.settings, "samples")
+        # col.prop(self.settings, "samples")  # removed. now part of bake list
         col.prop(self.render_settings, "margin")
 
         # Alpha to Color
@@ -193,12 +202,48 @@ class PBAKER_PT_PrefixSuffixSettings(PBAKER_PT_SubPanel):
     bl_label = "Prefix/Suffix Settings"
 
     def draw(self, context):
+
+        # Prefix
         col = self.layout
         col.label(text="Prefix Settings:")
         col.prop(self.settings, "image_prefix")
         col.prop(self.settings, "use_object_name")
-        # col.separator()
+
+        # Suffix
         col.label(text="Suffix Settings:")
+        col = self.layout.column(align=True)
+        col_suffixlist = col.column()
+        col_suffixlist.template_list("PBAKER_UL_SuffixList", "Suffix_List", context.scene,
+                                     "principled_baker_suffixlist",
+                                     context.scene, "principled_baker_suffixlist_index")
+
+        row = col_suffixlist.row(align=True)
+        init_slist = row.row()
+        init_slist.operator('principled_baker_suffixlist.init',
+                            text='Create')
+        if len(bpy.context.scene.principled_baker_suffixlist):
+            init_slist.active = False
+        row.separator()
+        row.operator('principled_baker_suffixlist.reset',
+                     text='Default')
+
+        # Suffix Presets
+        row = col_suffixlist.row(align=True)
+        row.menu(PBAKER_MT_display_suffix_presets.__name__,
+                 text=PBAKER_MT_display_suffix_presets.bl_label)
+        if is_2_80:
+            row.operator(PBAKER_AddSuffixPresetObjectDisplay.bl_idname,
+                         text="", icon='ADD')
+            row.operator(PBAKER_AddSuffixPresetObjectDisplay.bl_idname,
+                         text="", icon='REMOVE').remove_active = True
+        else:
+            row.operator(PBAKER_AddSuffixPresetObjectDisplay.bl_idname,
+                         text="", icon='ZOOM_IN')
+            row.operator(PBAKER_AddSuffixPresetObjectDisplay.bl_idname,
+                         text="", icon='ZOOM_OUT').remove_active = True
+
+        # Suffix mods
+        col.label(text="Suffix String Modifier:")
         row = col.row()
         row.prop(self.settings, 'suffix_text_mod', expand=True)
 
