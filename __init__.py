@@ -18,7 +18,7 @@ bl_info = {
     "name": "Principled Baker",
     "description": "bakes all inputs of Principled BSDF to image textures",
     "author": "Daniel Engler",
-    "version": (0, 4, 3),
+    "version": (0, 4, 4),
     "blender": (2, 80, 0),
     "location": "Shader Editor Toolbar",
     "category": "Node",
@@ -29,6 +29,7 @@ import bpy
 from .pbaker_bake import PBAKER_OT_bake
 from .pbaker_bakelist import *
 from .pbaker_suffixlist import *
+from .pbaker_combinelist import *
 from .pbaker_prefs import PBAKER_prefs
 from .pbaker_preset import *
 from .pbaker_settings import PBAKER_settings
@@ -55,10 +56,18 @@ if bpy.app.version_string.startswith('2.8'):
       PBAKER_SUFFIXLIST_OT_Init,
       PBAKER_SUFFIXLIST_OT_Delete,
       PBAKER_SUFFIXLIST_OT_Reset,
+      PBAKER_UL_CombineList,
+      PBAKER_CombineListItem,
+      PBAKER_COMBINELIST_OT_Add,
+      PBAKER_COMBINELIST_OT_Delete,
+      PBAKER_COMBINELIST_OT_MoveItem_Up,
+      PBAKER_COMBINELIST_OT_MoveItem_Down,
       PBAKER_AddPresetObjectDisplay,
       PBAKER_MT_display_presets,
       PBAKER_AddSuffixPresetObjectDisplay,
       PBAKER_MT_display_suffix_presets,
+      PBAKER_AddCombinePresetObjectDisplay,
+      PBAKER_MT_display_combine_presets,
       PBAKER_PT_Main,
       PBAKER_PT_SubPanel,
       PBAKER_PT_BakeList,
@@ -70,6 +79,7 @@ if bpy.app.version_string.startswith('2.8'):
       PBAKER_PT_AutoUVUnwrap,
       PBAKER_PT_SelectUVMap,
       PBAKER_PT_Misc,
+      PBAKER_PT_CombineChannels,
    )
 # 2.79
 else:
@@ -109,6 +119,9 @@ def register():
 
    bpy.types.Scene.principled_baker_suffixlist = bpy.props.CollectionProperty(type = PBAKER_SuffixListItem)
    bpy.types.Scene.principled_baker_suffixlist_index = bpy.props.IntProperty(name="Suffixlist Index", default = 0)
+
+   bpy.types.Scene.principled_baker_combinelist = bpy.props.CollectionProperty(type = PBAKER_CombineListItem)
+   bpy.types.Scene.principled_baker_combinelist_index = bpy.props.IntProperty(name="Combinelist Index", default = 0)
    
    
 def unregister():
@@ -118,6 +131,7 @@ def unregister():
    del bpy.types.Scene.principled_baker_settings
    del bpy.types.Scene.principled_baker_bakelist_index
    del bpy.types.Scene.principled_baker_suffixlist_index
+   del bpy.types.Scene.principled_baker_combinelist_index
 
 
 if __name__ == "__main__":

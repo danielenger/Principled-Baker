@@ -172,10 +172,7 @@ class PBAKER_PT_OutputSettings(PBAKER_PT_SubPanel):
         col.prop(self.render_settings, "margin")
 
         # Alpha to Color
-        col_alpha_to_col = col.row()
-        col_alpha_to_col.prop(self.settings, "use_alpha_to_color")
-        if self.settings.color_mode == 'RGB':
-            col_alpha_to_col.active = False
+        col.prop(self.settings, "use_alpha_to_color")
 
 
 class PBAKER_PT_SelectedToActiveSettings(PBAKER_PT_SubPanel):
@@ -317,6 +314,49 @@ class PBAKER_PT_Misc(PBAKER_PT_SubPanel):
 
     def draw(self, context):
         self.layout.prop(self.settings, "use_exclude_transparent_colors")
+
+
+class PBAKER_PT_CombineChannels(PBAKER_PT_SubPanel):
+    bl_parent_id = "PBAKER_PT_Main"
+    bl_label = "Combine Channels"
+
+    def draw(self, context):
+
+        row = self.layout.row()
+        row.template_list("PBAKER_UL_CombineList", "Combine_List", context.scene,
+                          "principled_baker_combinelist",
+                          context.scene, "principled_baker_combinelist_index")
+
+        col = row.column(align=True)
+        col.operator("principled_baker_combinelist.add", icon='ADD', text="")
+        col.operator("principled_baker_combinelist.delete",
+                     icon='REMOVE', text="")
+        col.separator()
+        col.operator("principled_baker_combinelist.move_up",
+                     icon='TRIA_UP', text="")
+        col.operator("principled_baker_combinelist.move_down",
+                     icon='TRIA_DOWN', text="")
+
+        col = self.layout.column()
+        col.template_list("PBAKER_UL_CombineList", "Combine_List", context.scene,
+                          "principled_baker_combinelist",
+                          context.scene, "principled_baker_combinelist_index",
+                          type='COMPACT')
+
+        # Combine Presets
+        row = col.row(align=True)
+        row.menu(PBAKER_MT_display_combine_presets.__name__,
+                 text=PBAKER_MT_display_combine_presets.bl_label)
+        if is_2_80:
+            row.operator(PBAKER_AddCombinePresetObjectDisplay.bl_idname,
+                         text="", icon='ADD')
+            row.operator(PBAKER_AddCombinePresetObjectDisplay.bl_idname,
+                         text="", icon='REMOVE').remove_active = True
+        else:
+            row.operator(PBAKER_AddCombinePresetObjectDisplay.bl_idname,
+                         text="", icon='ZOOM_IN')
+            row.operator(PBAKER_AddCombinePresetObjectDisplay.bl_idname,
+                         text="", icon='ZOOM_OUT').remove_active = True
 
 
 class PBAKER_PT_Main(Panel):

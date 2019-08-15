@@ -160,6 +160,22 @@ def get_combined_images(img1, img2, from_channel, to_channel):
     return a.reshape(size * n)
 
 
+def combine_channels_to_image(target_image, R=None, G=None, B=None, A=None, channel_r=0, channel_g=0, channel_b=0, channel_a=0):
+    """combine image channels into RGBA-channels of target image"""
+
+    n = 4
+    t = numpy.array(target_image.pixels)
+    if R:
+        t[0::n] = numpy.array(R.pixels)[channel_r::n]
+    if G:
+        t[1::n] = numpy.array(G.pixels)[channel_g::n]
+    if B:
+        t[2::n] = numpy.array(B.pixels)[channel_b::n]
+    if A:
+        t[3::n] = numpy.array(A.pixels)[channel_a::n]
+    target_image.pixels = t
+
+
 def get_invert_image(img):
     n = 4
     size = img.size[0] * img.size[1]

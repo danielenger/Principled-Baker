@@ -9,7 +9,7 @@ def color_mode_items(scene, context):
         items = [
             ('RGB', "RGB", ""),
             ('RGBA', "RGBA", ""),
-            # ('BW', "BW", ""),  # TODO remove BW
+            # ('BW', "BW", ""),  # TODO reenable and auto set to RGB/RGBA, if needed
         ]
     else:
         items = [
@@ -476,7 +476,7 @@ class PBAKER_settings(bpy.types.PropertyGroup):
     #     description='',
     #     default=False)
 
-    use_shortlist: BoolProperty(  # TODO short list
+    use_shortlist: BoolProperty(
         name="Short List",
         description='Show the most common Bake Types only',
         default=False,
