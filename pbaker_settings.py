@@ -348,6 +348,11 @@ class PBAKER_settings(bpy.types.PropertyGroup):
         ),
         default='OFF'
     )
+    new_uv_map: BoolProperty(
+        name="New UV Map",
+        default=False,
+        description="Add a new UV Map and select.\nIf object has 8 UV maps, no UV map will be added and the selected UV map will not be altered"
+    )
 
     # Smart UV Project:
     angle_limit: FloatProperty(
@@ -381,10 +386,6 @@ class PBAKER_settings(bpy.types.PropertyGroup):
     share_tex_space: BoolProperty(
         name="Share Tex Space",
         default=True
-    )
-    new_uv_map: BoolProperty(
-        name="New UV Map",
-        default=False
     )
     new_image: BoolProperty(
         name="New Image",
@@ -471,10 +472,10 @@ class PBAKER_settings(bpy.types.PropertyGroup):
         description='',
         default=False)
 
-    # set_active_render_uv_map: BoolProperty(  # TODO
-    #     name="Set as active render UV Map",
-    #     description='',
-    #     default=False)
+    set_active_render_uv_map: BoolProperty(  # TODO
+        name="Set as active render",
+        description='',
+        default=False)
 
     use_shortlist: BoolProperty(
         name="Short List",

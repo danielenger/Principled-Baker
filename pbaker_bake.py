@@ -855,25 +855,50 @@ class PBAKER_OT_bake(bpy.types.Operator):
     def lightmap_pack(self):
         bpy.ops.uv.lightmap_pack(PREF_CONTEXT='ALL_FACES',
                                  PREF_PACK_IN_ONE=self.settings.share_tex_space,
-                                 PREF_NEW_UVLAYER=self.settings.new_uv_map,
+                                 PREF_NEW_UVLAYER=False,  # see new UV Map
                                  PREF_APPLY_IMAGE=self.settings.new_image,
                                  PREF_IMG_PX_SIZE=self.settings.image_size,
                                  PREF_BOX_DIV=self.settings.pack_quality,
                                  PREF_MARGIN_DIV=self.settings.lightmap_margin)
 
-    def auto_uv_project(self, obj):
-        orig_selected_objects = self.selected_objects
-        for o in self.selected_objects:
-            select_set(o, False)
-        select_set(obj, True)
+    def auto_uv_project(self, objs, combined=False):
+        if self.settings.auto_uv_project == 'OFF':
+            return
 
-        if self.settings.auto_uv_project == 'SMART':
-            self.smart_project()
-        elif self.settings.auto_uv_project == 'LIGHTMAP':
-            self.lightmap_pack()
+        # no Auto UV Project in 2.79 in combined bake mode
+        if combined and is_2_79:
+            return
 
-        for o in orig_selected_objects:
-            select_set(o, True)
+        if not combined:
+            orig_selected_objects = self.selected_objects
+            for o in self.selected_objects:
+                select_set(o, False)
+            # select_set(obj, True)
+
+        if not type(objs) == type(list()):
+            objs = list(objs)
+
+        for obj in objs:
+            if not combined:
+                select_set(obj, True)
+
+            # new UV Map
+            if self.settings.new_uv_map:
+                bpy.ops.mesh.uv_texture_add()
+                if self.settings.set_active_render_uv_map:
+                    obj.data.uv_layers[obj.data.uv_layers.active.name].active_render = True
+
+            if self.settings.auto_uv_project == 'SMART':
+                self.smart_project()
+            elif self.settings.auto_uv_project == 'LIGHTMAP':
+                self.lightmap_pack()
+
+            if not combined:
+                select_set(obj, False)
+
+        if not combined:
+            for o in orig_selected_objects:
+                select_set(o, True)
 
     def bake_and_save(self, image, bake_type='EMIT', selected_to_active=False):
         if is_2_80:
@@ -1003,6 +1028,8 @@ class PBAKER_OT_bake(bpy.types.Operator):
 
     def combine_channels(self, obj):
         for combi in bpy.context.scene.principled_baker_combinelist:
+            if not combi.do_combine:
+                continue
 
             # create new image
             prefix = self.get_new_image_prefix(obj.name)
@@ -1409,12 +1436,7 @@ class PBAKER_OT_bake(bpy.types.Operator):
                 set_material_outputs_target_to_all(bake_objects)
 
             # Auto UV project
-            # no Auto Smart UV Project in 2.79
-            if is_2_80:
-                if self.settings.auto_uv_project == 'SMART':
-                    self.smart_project()
-                elif self.settings.auto_uv_project == 'LIGHTMAP':
-                    self.lightmap_pack()
+            self.auto_uv_project(bake_objects, combined=True)
 
             # UV Map selection
             orig_uv_layers_active_indices = {}

@@ -113,8 +113,8 @@ class PBAKER_UL_List(UIList):
             layout.prop(item, "samples", text="")
 
             # TODO expand bake list
-            # layout.prop(item, "color_mode", expand=True)
-            # layout.prop(item, "color_depth", expand=True)
+            # layout.prop(item, "color_mode", expand=True)  # is this useful?
+            # layout.prop(item, "color_depth", expand=True)  # good for 16-bit displacement
 
 
 class PBAKER_BAKELIST_OT_Init(Operator):

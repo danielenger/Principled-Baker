@@ -278,8 +278,17 @@ class PBAKER_PT_AutoUVUnwrap(PBAKER_PT_SubPanel):
             row = self.layout
             row.prop(self.settings, "auto_uv_project",
                      text="Auto UV Project", expand=True)
+
             if not self.settings.auto_uv_project == 'OFF':
-                self.layout.label(text="UV Map will be altered!", icon='ERROR')
+                # new UV Map
+                row.prop(self.settings, "new_uv_map")
+                if not self.settings.new_uv_map:
+                    self.layout.label(
+                        text="Selected UV Map will be altered!", icon='ERROR')
+                else:
+                    row.prop(self.settings, "set_active_render_uv_map")
+                self.layout.label(text="UV Map settings:")
+
             if self.settings.auto_uv_project == 'SMART':
                 col = self.layout
                 col.prop(self.settings, "angle_limit")
@@ -290,7 +299,7 @@ class PBAKER_PT_AutoUVUnwrap(PBAKER_PT_SubPanel):
             elif self.settings.auto_uv_project == 'LIGHTMAP':
                 col = self.layout
                 col.prop(self.settings, "share_tex_space")
-                col.prop(self.settings, "new_uv_map")
+                # col.prop(self.settings, "new_uv_map")  # see new UV Map
                 col.prop(self.settings, "new_image")
                 col.prop(self.settings, "image_size")
                 col.prop(self.settings, "pack_quality")

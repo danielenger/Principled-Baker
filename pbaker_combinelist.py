@@ -43,11 +43,14 @@ def from_channel_items(scene, context):
         ('0', "R", ""),
         ('1', "G", ""),
         ('2', "B", ""),
+        ('3', "A", ""),
     ]
 
 
 class PBAKER_CombineListItem(PropertyGroup):
     suffix: StringProperty(name="Suffix", default="_combined")
+
+    do_combine: BoolProperty(name="", default=True)
 
     channel_r: EnumProperty(name="R", items=channel_items,
                             description="Red Channel")
@@ -73,6 +76,7 @@ class PBAKER_UL_CombineList(UIList):
                   active_propname, index):
 
         if self.layout_type == 'DEFAULT':
+            layout.prop(item, 'do_combine', text='')
             layout.prop(item, 'name', text='', emboss=False, translate=False)
             layout.prop(item, 'suffix', text='')
         elif self.layout_type == 'COMPACT':
