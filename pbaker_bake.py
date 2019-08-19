@@ -44,22 +44,22 @@ class PBAKER_OT_bake(bpy.types.Operator):
         return suffix
 
     def set_samples(self):
-        bakelist = bpy.context.scene.principled_baker_bakelist
-        if self.job_name in bakelist.keys():
-            samples = bakelist[self.job_name].samples
-        else:
-            if self.job_name == "Diffuse":
-                samples = self.settings.samples_diffuse
-            elif self.job_name == "Bump":
-                samples = self.settings.samples_bump
-            elif self.job_name == "Vertex Color":
-                samples = self.settings.samples_vertex_color
-            elif self.job_name == "Material ID":
-                samples = self.settings.samples_material_id
-            elif self.job_name == "Wireframe":
-                samples = self.settings.samples_wireframe
+        samples = self.settings.samples
+        if self.settings.individual_samples and not self.settings.use_autodetect:
+            bakelist = bpy.context.scene.principled_baker_bakelist
+            if self.job_name in bakelist.keys():
+                samples = bakelist[self.job_name].samples
             else:
-                samples = 128  # default
+                if self.job_name == "Diffuse":
+                    samples = self.settings.samples_diffuse
+                elif self.job_name == "Bump":
+                    samples = self.settings.samples_bump
+                elif self.job_name == "Vertex Color":
+                    samples = self.settings.samples_vertex_color
+                elif self.job_name == "Material ID":
+                    samples = self.settings.samples_material_id
+                elif self.job_name == "Wireframe":
+                    samples = self.settings.samples_wireframe
         bpy.context.scene.cycles.samples = samples
 
     def delete_tagged_nodes(self, obj):
@@ -119,11 +119,30 @@ class PBAKER_OT_bake(bpy.types.Operator):
             color_mode = 'RGBA'
         else:
             color_mode = self.settings.color_mode
+
+        # color depth
+        color_depth = self.settings.color_depth
+        if color_depth == 'INDIVIDUAL':
+            bakelist = bpy.context.scene.principled_baker_bakelist
+            if self.job_name in bakelist.keys():
+                color_depth = bakelist[self.job_name].color_depth
+            else:
+                if self.job_name == "Diffuse":
+                    color_depth = self.settings.color_depth_diffuse
+                elif self.job_name == "Bump":
+                    color_depth = self.settings.color_depth_bump
+                elif self.job_name == "Vertex Color":
+                    color_depth = self.settings.color_depth_vertex_color
+                elif self.job_name == "Material ID":
+                    color_depth = self.settings.color_depth_material_id
+                elif self.job_name == "Wireframe":
+                    color_depth = self.settings.color_depth_wireframe
+
         save_image_as(image,
                       file_path=image.filepath,
                       file_format=self.settings.file_format,
                       color_mode=color_mode,
-                      color_depth=self.settings.color_depth,
+                      color_depth=color_depth,
                       compression=self.settings.compression,
                       quality=self.settings.quality,
                       tiff_codec=self.settings.tiff_codec,
@@ -953,15 +972,26 @@ class PBAKER_OT_bake(bpy.types.Operator):
         # 2.79/2.80
         uv_layers = obj.data.uv_textures if is_2_79 else obj.data.uv_layers
 
-        if self.settings.select_uv_map == 'ACTIVE_RENDER':
-            for i in range(0, len(obj.data.uv_layers)):
-                if uv_layers[i].active_render:
-                    uv_layers.active_index = i
-                    break
-        else:
-            index_uv_layer = int(self.settings.select_uv_map) - 1
+        if not self.settings.select_uv_map == 'SELECTED':
+            if self.settings.select_uv_map == 'ACTIVE_RENDER':
+                for i in range(0, len(obj.data.uv_layers)):
+                    if uv_layers[i].active_render:
+                        uv_layers.active_index = i
+                        break
+            else:
+                index_uv_layer = int(self.settings.select_uv_map) - 1
+                if index_uv_layer <= len(obj.data.uv_layers) - 1:
+                    uv_layers.active_index = index_uv_layer
+        
+        if self.settings.select_set_active_render_uv_map:
+            if self.settings.select_uv_map == 'ACTIVE_RENDER':
+                return
+            elif self.settings.select_uv_map == 'SELECTED':
+                index_uv_layer = uv_layers.active_index
+            else:
+                index_uv_layer = int(self.settings.select_uv_map) - 1
             if index_uv_layer <= len(obj.data.uv_layers) - 1:
-                uv_layers.active_index = index_uv_layer
+                uv_layers[index_uv_layer].active_render = True
 
     def check_file_path(self):
         for s in [':', '*', '?', '"', '<', '>', '|']:
@@ -997,6 +1027,9 @@ class PBAKER_OT_bake(bpy.types.Operator):
             return True
 
     def set_texture_folder(self, obj_name):
+        if not self.settings.use_texture_folder:
+            return
+
         self.texture_folder = remove_not_allowed_signs(obj_name)
 
         path = os.path.join(self.settings.file_path, self.texture_folder)
@@ -1031,15 +1064,16 @@ class PBAKER_OT_bake(bpy.types.Operator):
             if not combi.do_combine:
                 continue
 
-            # create new image
-            prefix = self.get_new_image_prefix(obj.name)
+            # Color Mode
             if combi.channel_a in self.new_images:
                 alpha = True
                 color_mode = 'RGBA'
             else:
                 alpha = False
                 color_mode = 'RGB'
-
+            
+            # create new image
+            prefix = self.get_new_image_prefix(obj.name)
             file_format = IMAGE_FILE_FORMAT_ENDINGS[self.settings.file_format]
             name = "{0}{1}.{2}".format(
                 self.get_new_image_prefix(obj.name),
@@ -1089,12 +1123,24 @@ class PBAKER_OT_bake(bpy.types.Operator):
                 channel_a=int(combi.channel_a_from_channel),
             )
 
+            # Color Depth
+            # TODO from input images color depth or as option?
+            color_depth = '8'
+            for img in [r, g, b, a]:
+                if img:
+                    if img.is_float:
+                        if self.settings.file_format == 'OPEN_EXR':
+                            color_depth = '32'
+                        else:
+                            color_depth = '16'
+                        break
+
             # save image
             save_image_as(image,
                           file_path=image.filepath,
                           file_format=self.settings.file_format,
                           color_mode=color_mode,
-                          color_depth=self.settings.color_depth,
+                          color_depth=color_depth,
                           compression=self.settings.compression,
                           quality=self.settings.quality,
                           tiff_codec=self.settings.tiff_codec,
@@ -1270,8 +1316,8 @@ class PBAKER_OT_bake(bpy.types.Operator):
 
                 # UV Map selection
                 orig_uv_layers_active_index = obj.data.uv_layers.active_index
-                if not self.settings.select_uv_map == 'SELECTED':
-                    self.select_uv_map(obj)
+                # if not self.settings.select_uv_map == 'SELECTED':
+                self.select_uv_map(obj)
 
                 # (optional) new material
                 if self.settings.make_new_material:
@@ -1442,8 +1488,8 @@ class PBAKER_OT_bake(bpy.types.Operator):
             orig_uv_layers_active_indices = {}
             for obj in bake_objects:
                 orig_uv_layers_active_indices[obj] = obj.data.uv_layers.active_index
-                if not self.settings.select_uv_map == 'SELECTED':
-                    self.select_uv_map(obj)
+                # if not self.settings.select_uv_map == 'SELECTED':
+                self.select_uv_map(obj)
 
             # (optional) new material
             if self.settings.make_new_material:
@@ -1629,8 +1675,8 @@ class PBAKER_OT_bake(bpy.types.Operator):
 
             # UV Map selection
             orig_uv_layers_active_index = self.active_object.data.uv_layers.active_index
-            if not self.settings.select_uv_map == 'SELECTED':
-                self.select_uv_map(self.active_object)
+            # if not self.settings.select_uv_map == 'SELECTED':
+            self.select_uv_map(self.active_object)
 
             # new material
             new_mat_name = self.active_object.name if self.settings.new_material_prefix == "" else self.settings.new_material_prefix

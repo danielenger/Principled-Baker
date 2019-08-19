@@ -52,7 +52,7 @@ class PBAKER_prefs(bpy.types.AddonPreferences):
         # 2.80
         if bpy.app.version_string.startswith('2.8'):
             col.prop(self, "switch_to_cycles")
-            col.label(text="This may crash Blender 2.80 beta!", icon='ERROR')
+            col.label(text="This may crash Blender!", icon='ERROR')
             col.separator()
 
         col.prop(self, "mat_id_algorithm")

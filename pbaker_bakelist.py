@@ -86,11 +86,11 @@ class PBAKER_ListItem(PropertyGroup):
         name="",
         default=False
     )
-    color_mode: EnumProperty(
-        name="Color Mode",
-        description="Color Mode",
-        items=color_mode_items
-    )
+    # color_mode: EnumProperty(
+    #     name="Color Mode",
+    #     description="Color Mode",
+    #     items=color_mode_items
+    # )
     color_depth: EnumProperty(
         name="Color Depth",
         description="Color Depth",
@@ -110,11 +110,17 @@ class PBAKER_UL_List(UIList):
         if self.layout_type in {'DEFAULT', 'COMPACT'}:
             layout.prop(item, "do_bake")
             layout.label(text=item.name)
-            layout.prop(item, "samples", text="")
+
+            settings = bpy.context.scene.principled_baker_settings
+
+            if settings.individual_samples:
+                layout.prop(item, "samples", text="")
+
+            if settings.color_depth == 'INDIVIDUAL':
+                layout.prop(item, "color_depth", expand=True)
 
             # TODO expand bake list
             # layout.prop(item, "color_mode", expand=True)  # is this useful?
-            # layout.prop(item, "color_depth", expand=True)  # good for 16-bit displacement
 
 
 class PBAKER_BAKELIST_OT_Init(Operator):

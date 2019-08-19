@@ -80,12 +80,21 @@ class PBAKER_PT_BakeList(PBAKER_PT_SubPanel):
         col.separator()
         col.label(text="Additional Bake Types:")
 
+        # Glossiness
+        row = col.split()
+        row.prop(self.settings, "use_invert_roughness")
+        # row.prop(self.settings, "suffix_glossiness", text="")
+
         # Diffuse
         col1 = col.column(align=True)
         row = col1.split()
         row.prop(self.settings, "use_Diffuse")
         # row.prop(self.settings, "suffix_diffuse", text="")
-        row.prop(self.settings, "samples_diffuse", text="")
+        if self.settings.individual_samples:
+            row.prop(self.settings, "samples_diffuse", text="")
+        if self.settings.color_depth == 'INDIVIDUAL':
+            row_cd = row.row()
+            row_cd.prop(self.settings, "color_depth_diffuse", expand=True)
         row_diff = col.row(align=True)
         if self.settings.use_Diffuse:
             row_diff.prop(self.render_settings, "use_pass_direct",
@@ -101,28 +110,37 @@ class PBAKER_PT_BakeList(PBAKER_PT_SubPanel):
         col2 = col.column(align=True)
 
         row = col2.split()
-        row.prop(self.settings, "use_invert_roughness")
-        # row.prop(self.settings, "suffix_glossiness", text="")
-
-        row = col2.split()
         row.prop(self.settings, "use_Bump")
-        # row.prop(self.settings, "suffix_bump", text="")
-        row.prop(self.settings, "samples_bump", text="")
+        if self.settings.individual_samples:
+            row.prop(self.settings, "samples_bump", text="")
+        if self.settings.color_depth == 'INDIVIDUAL':
+            row_cd = row.row()
+            row_cd.prop(self.settings, "color_depth_bump", expand=True)
 
         row = col2.split()
         row.prop(self.settings, "use_vertex_color")
-        # row.prop(self.settings, "suffix_vertex_color", text="")
-        row.prop(self.settings, "samples_vertex_color", text="")
+        if self.settings.individual_samples:
+            row.prop(self.settings, "samples_vertex_color", text="")
+        if self.settings.color_depth == 'INDIVIDUAL':
+            row_cd = row.row()
+            row_cd.prop(self.settings, "color_depth_vertex_color", expand=True)
 
         row = col2.split()
         row.prop(self.settings, "use_material_id")
-        # row.prop(self.settings, "suffix_material_id", text="")
-        row.prop(self.settings, "samples_material_id", text="")
+        if self.settings.individual_samples:
+            row.prop(self.settings, "samples_material_id", text="")
+        if self.settings.color_depth == 'INDIVIDUAL':
+            row_cd = row.row()
+            row_cd.prop(self.settings, "color_depth_material_id", expand=True)
 
         row = col2.split()
         row.prop(self.settings, "use_wireframe")
-        # row.prop(self.settings, "suffix_wireframe", text="")
-        row.prop(self.settings, "samples_wireframe", text="")
+        if self.settings.individual_samples:
+            row.prop(self.settings, "samples_wireframe", text="")
+        if self.settings.color_depth == 'INDIVIDUAL':
+            row_cd = row.row()
+            row_cd.prop(self.settings, "color_depth_wireframe", expand=True)
+
         if self.settings.use_wireframe:
             wf_row = col2.split()
             wf_row.prop(self.settings, "wireframe_size")
@@ -152,6 +170,9 @@ class PBAKER_PT_OutputSettings(PBAKER_PT_SubPanel):
 
         row = col.row()
         row.prop(self.settings, "color_mode", text="Color", expand=True)
+
+        if self.settings.color_depth == 'INDIVIDUAL' and self.settings.use_autodetect:
+            col.label(text="Set Color Depth for Autodetect!", icon='ERROR')
         row = col.row()
         row.prop(self.settings, "color_depth", text="Color Depth", expand=True)
 
@@ -167,8 +188,16 @@ class PBAKER_PT_OutputSettings(PBAKER_PT_SubPanel):
         if self.settings.file_format == 'JPEG':
             col.prop(self.settings, "quality", text="Quality")
 
+        # Samples
         col.separator()
-        # col.prop(self.settings, "samples")  # removed. now part of bake list
+        row_samples = col.row()
+        row_samples.prop(self.settings, "samples")
+        row_indi_samples = col.row()
+        row_indi_samples.prop(self.settings, "individual_samples")
+        if self.settings.individual_samples:
+            row_samples.active = False
+
+        col.separator()
         col.prop(self.render_settings, "margin")
 
         # Alpha to Color
@@ -314,7 +343,7 @@ class PBAKER_PT_SelectUVMap(PBAKER_PT_SubPanel):
         col = self.layout
         col.prop(self.settings, "select_uv_map", text="UV Map")
         col.prop(self.settings, "set_selected_uv_map")
-        # col.prop(self.settings, "set_active_render_uv_map") # TODO
+        col.prop(self.settings, "select_set_active_render_uv_map")
 
 
 class PBAKER_PT_Misc(PBAKER_PT_SubPanel):
@@ -391,12 +420,27 @@ class PBAKER_PT_Main(Panel):
         else:
             prefs = context.preferences.addons[__package__].preferences
 
-        if bpy.context.scene.render.engine == 'CYCLES' or prefs.switch_to_cycles:
-            self.layout.operator('object.principled_baker_bake',
-                                 text='Bake', icon='RENDER_STILL')
-        else:
+        can_bake = True
+
+        if not bpy.context.scene.render.engine == 'CYCLES' and not prefs.switch_to_cycles:
             self.layout.label(text="Set Render engine to Cycles! {} is not supported.".format(
                 bpy.context.scene.render.engine), icon='ERROR')
+            can_bake = False
+
+        if self.settings.color_depth == 'INDIVIDUAL' and self.settings.use_autodetect:
+            self.layout.label(text="Set Color Depth for Autodetect!", icon='ERROR')
+            can_bake = False
+
+        if can_bake:
+            self.layout.operator('object.principled_baker_bake',
+                                 text='Bake', icon='RENDER_STILL')
+
+        # if bpy.context.scene.render.engine == 'CYCLES' or prefs.switch_to_cycles:
+        #     self.layout.operator('object.principled_baker_bake',
+        #                          text='Bake', icon='RENDER_STILL')
+        # else:
+        #     self.layout.label(text="Set Render engine to Cycles! {} is not supported.".format(
+        #         bpy.context.scene.render.engine), icon='ERROR')
 
         # bake mode
         self.layout.prop(self.settings, "bake_mode",

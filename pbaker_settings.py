@@ -19,11 +19,27 @@ def color_mode_items(scene, context):
     return items
 
 
+def color_depth_individual_items(scene, context):
+    if scene.file_format == 'OPEN_EXR':
+        items = [
+            ('16', "Float (Half)", ""),
+            ('32', "Float (Full)", ""),
+            ('INDIVIDUAL', "Individual", ""),
+        ]
+    else:
+        items = [
+            ('8', "8", ""),
+            ('16', "16", ""),
+            ('INDIVIDUAL', "Individual", ""),
+        ]
+    return items
+
+
 def color_depth_items(scene, context):
     if scene.file_format == 'OPEN_EXR':
         items = [
             ('16', "Float (Half)", ""),
-            ('32', "Float (Full)", "")
+            ('32', "Float (Full)", ""),
         ]
     else:
         items = [
@@ -59,7 +75,7 @@ class PBAKER_settings(bpy.types.PropertyGroup):
 
     color_depth: EnumProperty(
         name="Color Depth",
-        items=color_depth_items
+        items=color_depth_individual_items
     )
 
     compression: IntProperty(
@@ -142,11 +158,15 @@ class PBAKER_settings(bpy.types.PropertyGroup):
     )
 
     # removed. now part of bake list
-    # samples: IntProperty(
-    #     name="Samples",
-    #     default=128,
-    #     min=1
-    # )
+    samples: IntProperty(
+        name="Samples",
+        default=128,
+        min=1
+    )
+    individual_samples: BoolProperty(
+        name="Individual Samples",
+        default=False,
+    )
 
     use_overwrite: BoolProperty(
         name="Overwrite",
@@ -251,6 +271,31 @@ class PBAKER_settings(bpy.types.PropertyGroup):
         name="Wireframe",
         default=128,
         min=1
+    )
+
+    color_depth_diffuse: EnumProperty(
+        name="Diffuse Color Depth",
+        items=color_depth_items
+    )
+    color_depth_bump: EnumProperty(
+        name="Bump (Height) Color Depth",
+        items=color_depth_items
+    )
+    color_depth_vertex_color: EnumProperty(
+        name="Vertex Color Color Depth",
+        items=color_depth_items
+    )
+    color_depth_material_id: EnumProperty(
+        name="Material ID Color Depth",
+        items=color_depth_items
+    )
+    color_depth_diffuse: EnumProperty(
+        name="Diffuse Color Depth",
+        items=color_depth_items
+    )
+    color_depth_wireframe: EnumProperty(
+        name="Wireframe Color Depth",
+        items=color_depth_items
     )
 
     image_prefix: StringProperty(
@@ -472,7 +517,12 @@ class PBAKER_settings(bpy.types.PropertyGroup):
         description='',
         default=False)
 
-    set_active_render_uv_map: BoolProperty(  # TODO
+    set_active_render_uv_map: BoolProperty(
+        name="Set as active render",
+        description='',
+        default=False)
+
+    select_set_active_render_uv_map: BoolProperty(
         name="Set as active render",
         description='',
         default=False)
