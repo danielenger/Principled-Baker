@@ -549,3 +549,24 @@ class PBAKER_settings(bpy.types.PropertyGroup):
         # max=100.0,
         soft_max=100.0
     )
+
+    duplicate_objects: BoolProperty(
+        name="Duplicate Objects",
+        description='',
+        default=False)
+
+    duplicate_objects_prefix: StringProperty(
+        name="Prefix",
+        default="",
+        maxlen=1024,
+    )
+
+    duplicate_objects_suffix: StringProperty(
+        name="Suffix",
+        default="",
+        maxlen=1024,
+    )
+
+    duplicate_object_loc_offset_x: FloatProperty(name="offset x", default=0.0,)
+    duplicate_object_loc_offset_y: FloatProperty(name="offset y", default=0.0,)
+    duplicate_object_loc_offset_z: FloatProperty(name="offset z", default=0.0,)

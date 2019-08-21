@@ -196,7 +196,7 @@ class PBAKER_OT_bake(bpy.types.Operator):
 
                     if value_list:
                         if is_list_equal(value_list):
-                            if self.settings.make_new_material or self.settings.bake_mode == 'SELECTED_TO_ACTIVE':
+                            if self.settings.make_new_material or self.settings.bake_mode == 'SELECTED_TO_ACTIVE' or self.settings.duplicate_objects:
                                 n_pri_node_settings[value_name] = value_list[0]
         return n_pri_node_settings
 
@@ -982,7 +982,7 @@ class PBAKER_OT_bake(bpy.types.Operator):
                 index_uv_layer = int(self.settings.select_uv_map) - 1
                 if index_uv_layer <= len(obj.data.uv_layers) - 1:
                     uv_layers.active_index = index_uv_layer
-        
+
         if self.settings.select_set_active_render_uv_map:
             if self.settings.select_uv_map == 'ACTIVE_RENDER':
                 return
@@ -1071,7 +1071,7 @@ class PBAKER_OT_bake(bpy.types.Operator):
             else:
                 alpha = False
                 color_mode = 'RGB'
-            
+
             # create new image
             prefix = self.get_new_image_prefix(obj.name)
             file_format = IMAGE_FILE_FORMAT_ENDINGS[self.settings.file_format]
@@ -1148,10 +1148,59 @@ class PBAKER_OT_bake(bpy.types.Operator):
             if is_2_80:
                 image.reload()
 
+    def duplicate_objects(self, obj, new_mat):
+        if self.settings.duplicate_objects:
+            # Duplicate object
+            for o in bpy.context.selected_objects:
+                select_set(o, False)
+            bpy.context.view_layer.objects.active = obj
+            select_set(obj, True)
+            bpy.ops.object.duplicate()
+            dup_obj = bpy.context.active_object
+            select_set(dup_obj, False)
+
+            # Rename
+            prefix = self.settings.duplicate_objects_prefix
+            suffix = self.settings.duplicate_objects_suffix
+            if prefix or suffix:
+                dup_obj.name = prefix + dup_obj.name[:-4] + suffix
+
+            # Relocate duplicat object
+            dup_obj.location.x += self.settings.duplicate_object_loc_offset_x
+            dup_obj.location.y += self.settings.duplicate_object_loc_offset_y
+            dup_obj.location.z += self.settings.duplicate_object_loc_offset_z
+
+            # Remove all but selected UV Map
+            uv_layers = dup_obj.data.uv_textures if is_2_79 else dup_obj.data.uv_layers
+            active_uv_layer_name = dup_obj.data.uv_layers.active.name
+            active_uv_layer = dup_obj.data.uv_layers.active
+            uv_layers_to_delete = []
+            for uv_layer in uv_layers:
+                if not uv_layer.name == active_uv_layer_name:
+                    uv_layers_to_delete.append(uv_layer.name)
+            for uv_layer_name in uv_layers_to_delete:
+                uv_layers.remove(uv_layers[uv_layer_name])
+
+            # Remove all materials
+            for mat_index in range(0, len(dup_obj.material_slots)):
+                mat_slot = dup_obj.material_slots[mat_index]
+                if mat_slot.material:
+                    # if tag in mat_slot.material.keys():
+                    bpy.context.object.active_material_index = mat_index
+                    bpy.ops.object.material_slot_remove(
+                        {'object': dup_obj})
+
+            dup_obj.data.materials.append(new_mat)
+
     # -------------------------------------------------------------------------
     # INVOKE
     # -------------------------------------------------------------------------
     def invoke(self, context, event):
+
+        if not context.selected_objects:
+            self.report({'INFO'}, "Nothing selected.")
+            return {'FINISHED'}
+
         # 2.79
         if is_2_79:
             self.prefs = context.user_preferences.addons[__package__].preferences
@@ -1161,9 +1210,13 @@ class PBAKER_OT_bake(bpy.types.Operator):
 
         self.settings = context.scene.principled_baker_settings
         self.render_settings = context.scene.render.bake
-        self.active_object = context.active_object
         self.selected_objects = bpy.context.selected_objects
         self.texture_folder = ""
+
+        self.active_object = context.active_object
+        if not self.active_object:
+            context.view_layer.objects.active = self.selected_objects[0]
+            self.active_object = context.active_object
 
         self.new_node_colors = {
             "Alpha": [1.0, 1.0, 1.0, 1.0],
@@ -1186,6 +1239,11 @@ class PBAKER_OT_bake(bpy.types.Operator):
             return {'CANCELLED'}
 
         # Input error handling
+        # for o in context.selected_objects:
+        #     if not o.type == 'MESH':
+        #         self.report(
+        #             {'ERROR'}, '{0} is not a mesh object'.format(o.name))
+        #         return {'CANCELLED'}
         if not self.active_object.type == 'MESH':
             self.report({'ERROR'}, '{0} is not a mesh object'.format(
                 self.active_object.name))
@@ -1320,7 +1378,8 @@ class PBAKER_OT_bake(bpy.types.Operator):
                 self.select_uv_map(obj)
 
                 # (optional) new material
-                if self.settings.make_new_material:
+                new_mat = None
+                if self.settings.make_new_material or self.settings.duplicate_objects:
                     # guess colors for Transparent, Translucent, Glass, Emission
                     for self.job_name in joblist:
                         if self.job_name in self.new_node_colors.keys():
@@ -1408,10 +1467,15 @@ class PBAKER_OT_bake(bpy.types.Operator):
                     # add alpha channel to color
                     self.alpha_channel_to_color()
 
+                # Duplicate object
+                self.duplicate_objects(obj, new_mat)
+
+                select_set(obj, False)
+
                 # jobs DONE
 
                 # add new images to new material
-                if self.settings.make_new_material:
+                if self.settings.make_new_material or self.settings.duplicate_objects:
                     self.add_images_to_material(new_mat)
                     self.report(
                         {'INFO'}, "Mew Material created. '{0}'".format(new_mat.name))
@@ -1427,7 +1491,7 @@ class PBAKER_OT_bake(bpy.types.Operator):
                         mat_output.target = target
 
                 # remove tag from new material
-                if self.settings.make_new_material:
+                if self.settings.make_new_material or self.settings.duplicate_objects:
                     if MATERIAL_TAG in new_mat:
                         del(new_mat[MATERIAL_TAG])
 
@@ -1492,7 +1556,7 @@ class PBAKER_OT_bake(bpy.types.Operator):
                 self.select_uv_map(obj)
 
             # (optional) new material
-            if self.settings.make_new_material:
+            if self.settings.make_new_material or self.settings.duplicate_objects:
                 new_mat_name = self.active_object.name if self.settings.new_material_prefix == "" else self.settings.new_material_prefix
                 new_mat = self.new_material(new_mat_name)
 
@@ -1587,7 +1651,7 @@ class PBAKER_OT_bake(bpy.types.Operator):
             # jobs DONE
 
             # add new images to new material
-            if self.settings.make_new_material:
+            if self.settings.make_new_material or self.settings.duplicate_objects:
                 self.add_images_to_material(new_mat)
                 self.report(
                     {'INFO'}, "Mew Material created. '{0}'".format(new_mat.name))
@@ -1603,7 +1667,7 @@ class PBAKER_OT_bake(bpy.types.Operator):
                     mat_output.target = target
 
             # remove tag from new material
-            if self.settings.make_new_material:
+            if self.settings.make_new_material or self.settings.duplicate_objects:
                 if MATERIAL_TAG in new_mat:
                     del(new_mat[MATERIAL_TAG])
 

@@ -397,6 +397,25 @@ class PBAKER_PT_CombineChannels(PBAKER_PT_SubPanel):
                          text="", icon='ZOOM_OUT').remove_active = True
 
 
+class PBAKER_PT_DuplicateObjects(PBAKER_PT_SubPanel):
+    bl_parent_id = "PBAKER_PT_Main"
+    bl_label = "Duplicate Objects"
+
+    def draw(self, context):
+        col = self.layout
+        col.prop(self.settings, "duplicate_objects")
+        col.prop(self.settings, "duplicate_objects_prefix")
+        col.prop(self.settings, "duplicate_objects_suffix")
+        col2 = col.column(align=True)
+        col2.prop(self.settings, "duplicate_object_loc_offset_x")
+        col2.prop(self.settings, "duplicate_object_loc_offset_y")
+        col2.prop(self.settings, "duplicate_object_loc_offset_z")
+
+        if not self.settings.bake_mode == 'BATCH':
+            col.active = False
+
+
+
 class PBAKER_PT_Main(Panel):
     bl_space_type = "NODE_EDITOR"
     bl_region_type = "UI"
@@ -428,19 +447,13 @@ class PBAKER_PT_Main(Panel):
             can_bake = False
 
         if self.settings.color_depth == 'INDIVIDUAL' and self.settings.use_autodetect:
-            self.layout.label(text="Set Color Depth for Autodetect!", icon='ERROR')
+            self.layout.label(
+                text="Set Color Depth for Autodetect!", icon='ERROR')
             can_bake = False
 
         if can_bake:
             self.layout.operator('object.principled_baker_bake',
                                  text='Bake', icon='RENDER_STILL')
-
-        # if bpy.context.scene.render.engine == 'CYCLES' or prefs.switch_to_cycles:
-        #     self.layout.operator('object.principled_baker_bake',
-        #                          text='Bake', icon='RENDER_STILL')
-        # else:
-        #     self.layout.label(text="Set Render engine to Cycles! {} is not supported.".format(
-        #         bpy.context.scene.render.engine), icon='ERROR')
 
         # bake mode
         self.layout.prop(self.settings, "bake_mode",

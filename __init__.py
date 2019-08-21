@@ -18,7 +18,7 @@ bl_info = {
     "name": "Principled Baker",
     "description": "bakes all inputs of Principled BSDF to image textures",
     "author": "Daniel Engler",
-    "version": (0, 4, 6),
+    "version": (0, 4, 7),
     "blender": (2, 80, 0),
     "location": "Shader Editor Toolbar",
     "category": "Node",
@@ -80,6 +80,7 @@ if bpy.app.version_string.startswith('2.8'):
       PBAKER_PT_SelectUVMap,
       PBAKER_PT_Misc,
       PBAKER_PT_CombineChannels,
+      PBAKER_PT_DuplicateObjects,
    )
 # 2.79
 else:
