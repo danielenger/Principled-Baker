@@ -520,8 +520,7 @@ def prepare_bake(mat, socket, new_socket, input_socket_name):
 
 
 def add_temp_material(obj):
-    name = "PRINCIPLED_BAKER_TEMP_MATERIAL_FOR_VERTEX_COLOR_{}".format(
-        time.time())
+    name = "PRINCIPLED_BAKER_TEMP_MATERIAL_{}".format(time.time())
     mat = bpy.data.materials.new(name)
     mat[MATERIAL_TAG_VERTEX] = 1
     mat.use_nodes = True
@@ -793,6 +792,17 @@ def get_joblist_from_object(obj):
 
 def get_joblist_from_objects(objs):
     joblist = []
+    settings = bpy.context.scene.principled_baker_settings
+
+    if settings.bake_mode == 'SELECTED_TO_ACTIVE':
+        # exclude active object from selected objects
+        if bpy.context.active_object in objs:
+            objs.remove(bpy.context.active_object)
+        # return "Normal" only, if one object has no material
+        for obj in objs:
+            if not has_material(obj):
+                return ["Normal"]
+
     for obj in objs:
         for job in get_joblist_from_object(obj):
             if job not in joblist:

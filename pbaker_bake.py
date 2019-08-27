@@ -577,13 +577,6 @@ class PBAKER_OT_bake(bpy.types.Operator):
                     self.report(
                         {'INFO'}, "baking cancelled. '{0}' Material missing, Material Output missing, or Material Output input missing.".format(obj.name))
                     return False
-            # no UV map?
-            if not self.settings.bake_mode == 'SELECTED_TO_ACTIVE':
-                if self.settings.auto_uv_project == 'OFF':
-                    if len(obj.data.uv_layers) == 0:
-                        self.report(
-                            {'INFO'}, "baking cancelled. '{0}' UV map missing.".format(obj.name))
-                        return False
             # has vertex color?
             if not self.settings.bake_mode == 'BATCH':
                 if self.settings.use_vertex_color and len(obj.data.vertex_colors) == 0:
@@ -1682,24 +1675,20 @@ class PBAKER_OT_bake(bpy.types.Operator):
         ########
         elif self.settings.bake_mode == 'SELECTED_TO_ACTIVE':
 
-            # Can bake?
-            if not self.can_bake(bake_objects):
-                self.final_cleanup()
-                return {'CANCELLED'}
-
-            # Can bake? empty material slot in active object
-            for mat_slot in self.active_object.material_slots:
-                if not mat_slot.material:
-                    self.report(
-                        {'INFO'}, "baking cancelled. '{0}' has empty Material Slots.".format(obj.name))
-                    self.final_cleanup()
-                    return {'CANCELLED'}
-
             # has active object UV map?
             if self.settings.auto_uv_project == 'OFF':
                 if len(self.active_object.data.uv_layers) == 0:
                     self.report(
                         {'INFO'}, "baking cancelled. '{0}' UV map missing.".format(self.active_object.name))
+                    self.final_cleanup()
+                    return {'CANCELLED'}
+
+            # Can bake?
+            for obj in bake_objects:
+                # enabled for rendering?
+                if obj.hide_render:
+                    self.report(
+                        {'INFO'}, "baking cancelled. '{0}' not enabled for rendering.".format(obj.name))
                     self.final_cleanup()
                     return {'CANCELLED'}
 
@@ -1713,8 +1702,17 @@ class PBAKER_OT_bake(bpy.types.Operator):
             self.extend_joblist(joblist)
 
             if self.settings.use_vertex_color:
+                for obj in bake_objects:
+                    if len(obj.data.vertex_colors) == 0:
+                        self.report(
+                            {'INFO'}, "baking cancelled. '{0}' has no Vertex Color.".format(obj.name))
+                        self.final_cleanup()
+                        return {'CANCELLED'}
                 if "Vertex Color" not in joblist:
                     joblist.append("Vertex Color")
+            else:
+                self.report(
+                    {'INFO'}, "baking cancelled. '{0}' has no Vertex Color.".format(obj.name))
 
             # empty joblist -> nothing to do
             if not joblist:
@@ -1777,8 +1775,8 @@ class PBAKER_OT_bake(bpy.types.Operator):
                 # append image to image dict for new material
                 self.new_images[self.job_name] = image
 
-                # temp material for vertex color
-                if self.settings.use_vertex_color:
+                # temp material for vertex color or wireframe
+                if self.settings.use_vertex_color or self.settings.use_wireframe:
                     for obj in bake_objects:
                         if not has_material(obj):
                             add_temp_material(obj)
@@ -1855,6 +1853,10 @@ class PBAKER_OT_bake(bpy.types.Operator):
             if is_2_80:
                 for mat_output, target in all_material_outputs.items():
                     mat_output.target = target
+
+            # remove new material from active object
+            if not self.settings.add_new_material:
+                self.delete_tagged_materials(self.active_object, MATERIAL_TAG)
 
             # remove tag from new material
             if self.settings.make_new_material:
