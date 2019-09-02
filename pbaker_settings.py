@@ -555,6 +555,11 @@ class PBAKER_settings(bpy.types.PropertyGroup):
         description='',
         default=False)
 
+    join_duplicate_objects: BoolProperty(
+        name="Join Duplicate Objects",
+        description='',
+        default=False)
+
     duplicate_objects_prefix: StringProperty(
         name="Prefix",
         default="",

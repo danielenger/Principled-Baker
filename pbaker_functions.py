@@ -418,9 +418,9 @@ def prepare_bake(mat, socket, new_socket, input_socket_name):
         mat.node_tree.links.new(mix_node.outputs[0], new_socket)
         mix_node.label = input_socket_name
 
-        for i in range(0, 2):
-            if node.inputs[i].is_linked:
-                from_socket = node.inputs[i].links[0].from_socket
+        for i, input in enumerate(node.inputs):
+            if input.is_linked:
+                from_socket = input.links[0].from_socket
                 new_socket = mix_node.inputs[i + 1]
                 prepare_bake(mat, from_socket, new_socket, input_socket_name)
 
@@ -868,9 +868,9 @@ def get_all_nodes_linked_from(node):
 def socket_index(socket):
     node = socket.node
     sockets = node.outputs if socket.is_output else node.inputs
-    for i in range(0, len(sockets)):
-        if sockets[i].is_linked:
-            if socket == sockets[i]:
+    for i, s in enumerate(sockets):
+        if s.is_linked:
+            if socket == s:
                 return i
                 break
 
@@ -897,14 +897,14 @@ def duplicate_node(mat, node):
             except AttributeError as e:
                 pass
 
-        for i in range(0, len(node.color_ramp.elements)):
+        for i, col_ramp_elem in enumerate(node.color_ramp.elements):
             try:
-                new_node.color_ramp.elements[i].color = node.color_ramp.elements[i].color
-                new_node.color_ramp.elements[i].position = node.color_ramp.elements[i].position
+                new_node.color_ramp.elements[i].color = col_ramp_elem.color
+                new_node.color_ramp.elements[i].position = col_ramp_elem.position
             except IndexError as e:
-                pos = node.color_ramp.elements[i].position
+                pos = col_ramp_elem.position
                 new_elem = new_node.color_ramp.elements.new(pos)
-                new_elem.color = node.color_ramp.elements[i].color
+                new_elem.color = col_ramp_elem.color
 
     # Curve
     if node.type == 'CURVE_RGB':
@@ -915,27 +915,28 @@ def duplicate_node(mat, node):
             except AttributeError as e:
                 pass
 
-        for i in range(0, len(node.mapping.curves)):
-            for p in range(0, len(node.mapping.curves[i].points)):
+        # copy every point in every curve
+        for i, curve in enumerate(node.mapping.curves):
+            for j, point in enumerate(curve.points):
                 try:
-                    new_node.mapping.curves[i].points[p].location = node.mapping.curves[i].points[p].location
-                    new_node.mapping.curves[i].points[p].handle_type = node.mapping.curves[i].points[p].handle_type
+                    new_node.mapping.curves[i].points[j].location = point.location
+                    new_node.mapping.curves[i].points[j].handle_type = point.handle_type
                 except IndexError as e:
-                    pos = node.mapping.curves[i].points[p].location[0]
-                    val = node.mapping.curves[i].points[p].location[1]
+                    pos = point.location[0]
+                    val = point.location[1]
                     new_node.mapping.curves[i].points.new(pos, val)
 
     # copy values inputs
-    for i in range(0, len(node.inputs)):
+    for i, input in enumerate(node.inputs):
         try:
-            new_node.inputs[i].default_value = node.inputs[i].default_value
+            new_node.inputs[i].default_value = input.default_value
         except:
             pass
 
     # copy values outputs
-    for i in range(0, len(node.outputs)):
+    for i, output in enumerate(node.outputs):
         try:
-            new_node.outputs[i].default_value = node.outputs[i].default_value
+            new_node.outputs[i].default_value = output.default_value
         except:
             pass
 
@@ -954,8 +955,7 @@ def duplicate_nodes(mat, nodes, keep_inputs=False):
         for node, new_node in new_nodes.items():
             len_inputs = len(node.inputs)
             if len_inputs > 0:
-                for i in range(0, len_inputs):  # for input in node.inputs:
-                    input = node.inputs[i]
+                for i, input in enumerate(node.inputs):
                     if input.is_linked:
                         link = input.links[0]
                         from_node = link.from_node
@@ -1024,8 +1024,7 @@ def ungroup_nodes(mat, group_nodes):
             output_count = len(group_input_nodes[0].outputs)
             group_input_outputs = [None] * output_count
             for node in group_input_nodes:
-                for i in range(0, output_count):  # for input in node.inputs:
-                    output = node.outputs[i]
+                for i, output in enumerate(node.outputs):
                     if output.is_linked:
                         group_input_outputs[i] = output
 
@@ -1035,17 +1034,15 @@ def ungroup_nodes(mat, group_nodes):
             input_count = len(group_output_nodes[0].inputs)
             group_output_inputs = [None] * input_count
             for node in group_output_nodes:
-                for i in range(0, input_count):  # for input in node.inputs:
-                    input = node.inputs[i]
+                for i, input in enumerate(node.inputs):
                     if input.is_linked:
                         group_output_inputs[i] = input
 
             # new value nodes
-            for index in range(0, output_count):
+            for index, input in enumerate(group_node.inputs):
                 if group_input_outputs[index]:
-                    input = group_node.inputs[index]
                     if not input.is_linked:
-                        val = group_node.inputs[index].default_value
+                        val = input.default_value
                         tmp_node = None
                         if input.type == 'VALUE':
                             tmp_node = mat.node_tree.nodes.new(
@@ -1089,13 +1086,36 @@ def delete_tagged_nodes(material, tag):
             material.node_tree.nodes.remove(node)
 
 
+def delete_tagged_nodes_in_object(obj):
+    for mat_slot in obj.material_slots:
+        if mat_slot.material:
+            delete_tagged_nodes(mat_slot.material, NODE_TAG)
+
+
 def deactivate_material_outputs(material):
     for node in material.node_tree.nodes:
         if node.type == "OUTPUT_MATERIAL":
             node.is_active_output = False
 
 
-def remove_not_allowed_signs(str):
+def remove_not_allowed_signs(string):
+    """retuns string (eg. from object name) without all signs not allowed in file names or paths"""
     for s in NOT_ALLOWED_SIGNS:
-        str = str.replace(s, "")
-    return str
+        string = string.replace(s, "")
+    return string
+
+
+def delete_tagged_materials(obj, tag):
+    for i, mat_slot in enumerate(obj.material_slots):
+        if mat_slot.material:
+            if tag in mat_slot.material.keys():
+                bpy.context.object.active_material_index = i
+                bpy.ops.object.material_slot_remove({'object': obj})
+
+
+def disable_material_outputs(obj):
+    for mat_slot in obj.material_slots:
+        if mat_slot.material:
+            for node in mat_slot.material.node_tree.nodes:
+                if node.type == "OUTPUT_MATERIAL":
+                    node.is_active_output = False

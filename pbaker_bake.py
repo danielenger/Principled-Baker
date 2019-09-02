@@ -62,26 +62,6 @@ class PBAKER_OT_bake(bpy.types.Operator):
                     samples = self.settings.samples_wireframe
         bpy.context.scene.cycles.samples = samples
 
-    def delete_tagged_nodes(self, obj):
-        for mat_slot in obj.material_slots:
-            if mat_slot.material:
-                delete_tagged_nodes(mat_slot.material, NODE_TAG)
-
-    def delete_tagged_materials(self, obj, tag):
-        for mat_index in range(0, len(obj.material_slots)):
-            mat_slot = obj.material_slots[mat_index]
-            if mat_slot.material:
-                if tag in mat_slot.material.keys():
-                    bpy.context.object.active_material_index = mat_index
-                    bpy.ops.object.material_slot_remove({'object': obj})
-
-    def disable_material_outputs(self, obj):
-        for mat_slot in obj.material_slots:
-            if mat_slot.material:
-                for node in mat_slot.material.node_tree.nodes:
-                    if node.type == "OUTPUT_MATERIAL":
-                        node.is_active_output = False
-
     def guess_colors(self, obj):
         for mat_slot in obj.material_slots:
             if mat_slot.material:
@@ -967,8 +947,8 @@ class PBAKER_OT_bake(bpy.types.Operator):
 
         if not self.settings.select_uv_map == 'SELECTED':
             if self.settings.select_uv_map == 'ACTIVE_RENDER':
-                for i in range(0, len(obj.data.uv_layers)):
-                    if uv_layers[i].active_render:
+                for i, uv_layer in enumerate(obj.data.uv_layers):
+                    if uv_layer.active_render:
                         uv_layers.active_index = i
                         break
             else:
@@ -1141,49 +1121,74 @@ class PBAKER_OT_bake(bpy.types.Operator):
             if is_2_80:
                 image.reload()
 
-    def duplicate_objects(self, obj, new_mat):
-        if self.settings.duplicate_objects:
-            # Duplicate object
-            for o in bpy.context.selected_objects:
-                select_set(o, False)
-            bpy.context.view_layer.objects.active = obj
-            select_set(obj, True)
-            bpy.ops.object.duplicate()
-            dup_obj = bpy.context.active_object
-            select_set(dup_obj, False)
+    def duplicate_objects(self, objs, new_mat):
+        dup_objs = []
+        active_dup_obj = self.duplicate_object(self.active_object, new_mat)
 
-            # Rename
-            prefix = self.settings.duplicate_objects_prefix
-            suffix = self.settings.duplicate_objects_suffix
-            if prefix or suffix:
-                dup_obj.name = prefix + dup_obj.name[:-4] + suffix
+        if self.active_object in objs:
+            objs.remove(self.active_object)
 
-            # Relocate duplicat object
-            dup_obj.location.x += self.settings.duplicate_object_loc_offset_x
-            dup_obj.location.y += self.settings.duplicate_object_loc_offset_y
-            dup_obj.location.z += self.settings.duplicate_object_loc_offset_z
-
-            # Remove all but selected UV Map
+        for obj in objs:
+            dup_obj = self.duplicate_object(obj, new_mat)
             uv_layers = dup_obj.data.uv_textures if is_2_79 else dup_obj.data.uv_layers
-            active_uv_layer_name = dup_obj.data.uv_layers.active.name
-            active_uv_layer = dup_obj.data.uv_layers.active
-            uv_layers_to_delete = []
-            for uv_layer in uv_layers:
-                if not uv_layer.name == active_uv_layer_name:
-                    uv_layers_to_delete.append(uv_layer.name)
-            for uv_layer_name in uv_layers_to_delete:
-                uv_layers.remove(uv_layers[uv_layer_name])
 
-            # Remove all materials
-            for mat_index in range(0, len(dup_obj.material_slots)):
-                mat_slot = dup_obj.material_slots[mat_index]
-                if mat_slot.material:
-                    # if tag in mat_slot.material.keys():
-                    bpy.context.object.active_material_index = mat_index
-                    bpy.ops.object.material_slot_remove(
-                        {'object': dup_obj})
+            # Equal UV Map names
+            uv_layers[0].name = active_dup_obj.data.uv_layers.active.name
 
-            dup_obj.data.materials.append(new_mat)
+            dup_objs.append(dup_obj)
+
+        if self.settings.join_duplicate_objects:
+            # dup_objs[0]
+            bpy.context.view_layer.objects.active = active_dup_obj
+            select_set(active_dup_obj, True)
+            for o in dup_objs:
+                select_set(o, True)
+            bpy.ops.object.join()
+
+    def duplicate_object(self, obj, new_mat):
+        dup_obj = None
+        # Duplicate object
+        for o in bpy.context.selected_objects:
+            select_set(o, False)
+        bpy.context.view_layer.objects.active = obj
+        select_set(obj, True)
+        bpy.ops.object.duplicate()
+        dup_obj = bpy.context.active_object
+
+        # Rename
+        prefix = self.settings.duplicate_objects_prefix
+        suffix = self.settings.duplicate_objects_suffix
+        if prefix or suffix:
+            dup_obj.name = prefix + dup_obj.name[:-4] + suffix
+
+        # Relocate duplicat object
+        dup_obj.location.x += self.settings.duplicate_object_loc_offset_x
+        dup_obj.location.y += self.settings.duplicate_object_loc_offset_y
+        dup_obj.location.z += self.settings.duplicate_object_loc_offset_z
+
+        # Remove all but selected UV Map
+        uv_layers = dup_obj.data.uv_textures if is_2_79 else dup_obj.data.uv_layers
+        active_uv_layer_name = dup_obj.data.uv_layers.active.name
+        active_uv_layer = dup_obj.data.uv_layers.active
+        uv_layers_to_delete = []
+        for uv_layer in uv_layers:
+            if not uv_layer.name == active_uv_layer_name:
+                uv_layers_to_delete.append(uv_layer.name)
+        for uv_layer_name in uv_layers_to_delete:
+            uv_layers.remove(uv_layers[uv_layer_name])
+
+        # Remove all materials
+        for i, mat_slot in enumerate(dup_obj.material_slots):
+            if mat_slot.material:
+                bpy.context.object.active_material_index = i
+                bpy.ops.object.material_slot_remove({'object': dup_obj})
+
+        # Add new material
+        dup_obj.data.materials.append(new_mat)
+
+        select_set(dup_obj, False)
+
+        return dup_obj
 
     # -------------------------------------------------------------------------
     # INVOKE
@@ -1439,13 +1444,13 @@ class PBAKER_OT_bake(bpy.types.Operator):
 
                     # Clean up!
                     # delete temp materials
-                    self.delete_tagged_materials(obj, MATERIAL_TAG_VERTEX)
+                    delete_tagged_materials(obj, MATERIAL_TAG_VERTEX)
 
                     # delete temp nodes
-                    self.delete_tagged_nodes(obj)
+                    delete_tagged_nodes_in_object(obj)
 
                     # reactivate Material Outputs
-                    self.disable_material_outputs(obj)
+                    disable_material_outputs(obj)
                     for mat_output in active_outputs:
                         mat_output.is_active_output = True
 
@@ -1460,12 +1465,11 @@ class PBAKER_OT_bake(bpy.types.Operator):
                     # add alpha channel to color
                     self.alpha_channel_to_color()
 
-                # Duplicate object
-                self.duplicate_objects(obj, new_mat)
-
-                select_set(obj, False)
-
                 # jobs DONE
+
+                # Duplicate object
+                if self.settings.duplicate_objects:
+                    self.duplicate_object(obj, new_mat)
 
                 # add new images to new material
                 if self.settings.make_new_material or self.settings.duplicate_objects:
@@ -1615,19 +1619,20 @@ class PBAKER_OT_bake(bpy.types.Operator):
                 # Clean up!
                 for obj in bake_objects:
                     # delete temp materials
-                    self.delete_tagged_materials(obj, MATERIAL_TAG_VERTEX)
+                    delete_tagged_materials(obj, MATERIAL_TAG_VERTEX)
 
                     # delete temp nodes
-                    self.delete_tagged_nodes(obj)
-
-                    # reactivate Material Outputs
-                    self.disable_material_outputs(obj)
+                    delete_tagged_nodes_in_object(obj)
 
                     # reselect UV Map
                     if not self.settings.set_selected_uv_map:
                         uv_layers = obj.data.uv_textures if is_2_79 else obj.data.uv_layers
                         uv_layers.active_index = orig_uv_layers_active_indices[obj]
 
+                    # reactivate Material Outputs
+                    disable_material_outputs(obj)
+
+                # reactivate Material Outputs
                 for mat_output in active_outputs:
                     mat_output.is_active_output = True
 
@@ -1642,6 +1647,10 @@ class PBAKER_OT_bake(bpy.types.Operator):
                 bpy.context.window_manager.progress_update(progress)
 
             # jobs DONE
+
+            # Duplicate objects
+            if self.settings.duplicate_objects:
+                self.duplicate_objects(bake_objects, new_mat)
 
             # add new images to new material
             if self.settings.make_new_material or self.settings.duplicate_objects:
@@ -1805,23 +1814,23 @@ class PBAKER_OT_bake(bpy.types.Operator):
                 # Clean up!
                 for obj in bake_objects:
                     # delete temp materials
-                    self.delete_tagged_materials(obj, MATERIAL_TAG_VERTEX)
+                    delete_tagged_materials(obj, MATERIAL_TAG_VERTEX)
 
                     # delete temp nodes
-                    self.delete_tagged_nodes(obj)
+                    delete_tagged_nodes_in_object(obj)
 
                     # reactivate Material Outputs
-                    self.disable_material_outputs(obj)
+                    disable_material_outputs(obj)
 
                 # delete temp materials
-                self.delete_tagged_materials(
+                delete_tagged_materials(
                     self.active_object, MATERIAL_TAG_VERTEX)
 
                 # delete temp nodes
-                self.delete_tagged_nodes(self.active_object)
+                delete_tagged_nodes_in_object(self.active_object)
 
                 # reactivate Material Outputs
-                self.disable_material_outputs(self.active_object)
+                disable_material_outputs(self.active_object)
                 for mat_output in active_outputs:
                     mat_output.is_active_output = True
 
@@ -1856,7 +1865,7 @@ class PBAKER_OT_bake(bpy.types.Operator):
 
             # remove new material from active object
             if not self.settings.add_new_material:
-                self.delete_tagged_materials(self.active_object, MATERIAL_TAG)
+                delete_tagged_materials(self.active_object, MATERIAL_TAG)
 
             # remove tag from new material
             if self.settings.make_new_material:

@@ -404,6 +404,7 @@ class PBAKER_PT_DuplicateObjects(PBAKER_PT_SubPanel):
     def draw(self, context):
         col = self.layout
         col.prop(self.settings, "duplicate_objects")
+        col.prop(self.settings, "join_duplicate_objects")
         col.prop(self.settings, "duplicate_objects_prefix")
         col.prop(self.settings, "duplicate_objects_suffix")
         col2 = col.column(align=True)
@@ -411,7 +412,7 @@ class PBAKER_PT_DuplicateObjects(PBAKER_PT_SubPanel):
         col2.prop(self.settings, "duplicate_object_loc_offset_y")
         col2.prop(self.settings, "duplicate_object_loc_offset_z")
 
-        if not self.settings.bake_mode == 'BATCH':
+        if self.settings.bake_mode == 'SELECTED_TO_ACTIVE':
             col.active = False
 
 
