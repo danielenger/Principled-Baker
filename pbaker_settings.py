@@ -486,6 +486,25 @@ class PBAKER_settings(bpy.types.PropertyGroup):
 
     use_vertex_color: BoolProperty(name="Vertex Color", default=False)
 
+    bake_vertex_colors: EnumProperty(
+        name="Vertex Colors",
+        description='Select Vertex Colors to bake',
+        items=(
+            ('SELECTED', 'Selected', ''),
+            ('ACTIVE_RENDER', 'Active Render', ''),
+            ('ALL', 'All', ''),
+            ('1', '1', ''),
+            ('2', '2', ''),
+            ('3', '3', ''),
+            ('4', '4', ''),
+            ('5', '5', ''),
+            ('6', '6', ''),
+            ('7', '7', ''),
+            ('8', '8', ''),
+        ),
+        default='SELECTED'
+    )
+
     use_material_id: BoolProperty(name="Material ID", default=False)
 
     # Diffuse

@@ -82,6 +82,7 @@ IMAGE_NODE_WIDTH = 300
 PRINCIPLED_BAKER_TEMP_MATERIAL_NAME = "PRINCIPLED_BAKER_TEMP_MATERIAL_{}".format(
     time.time())
 
+# signs not allowed in file names or paths
 NOT_ALLOWED_SIGNS = ['\\', '/', ':', '*', '?', '"', '<', '>', '|']
 
 
@@ -90,12 +91,11 @@ def fill_image(image, color):
 
 
 def is_list_equal(list):
-    list = iter(list)
-    try:
-        first = next(list)
-    except StopIteration:
-        return True
-    return all(first == rest for rest in list)
+    """return True, if all items in list are equal"""
+    if not list:
+        return False  # False, if list is empty
+    first = list[0]
+    return all(first == item for item in list[1:])
 
 
 def get_active_output(mat):
@@ -126,7 +126,7 @@ def find_node_by_type(mat, node_type):
             return node
 
 
-def new_rgb_node(mat, color=[0, 0, 0, 1]):
+def new_rgb_node(mat, color=(0, 0, 0, 1)):
     node = mat.node_tree.nodes.new(type="ShaderNodeRGB")
     node[NODE_TAG] = 1
     node.outputs['Color'].default_value = color
@@ -149,6 +149,20 @@ def new_mixrgb_node(mat, fac=0.5, color1=[0, 0, 0, 1], color2=[0, 0, 0, 1]):
 def new_image_node(material):
     image_node = material.node_tree.nodes.new(type="ShaderNodeTexImage")
     return image_node
+
+
+def new_pb_emission_node(material, color=[0, 0, 0, 1]):
+    node = material.node_tree.nodes.new(type='ShaderNodeEmission')
+    node.inputs['Color'].default_value = color  # [0, 0, 0, 1]
+    node[NODE_TAG] = 1
+    return node
+
+
+def new_pb_output_node(material):
+    node = material.node_tree.nodes.new(type='ShaderNodeOutputMaterial')
+    node.is_active_output = True
+    node[NODE_TAG] = 1
+    return node
 
 
 def get_combined_images(img1, img2, from_channel, to_channel):
@@ -277,22 +291,23 @@ def prepare_bake_factor(mat, socket, new_socket, node_type, factor_name='Fac'):
                     mat, from_socket, new_socket, node_type, factor_name)
 
 
-def prepare_bake_ao(mat, socket, new_socket):
+def is_mixnode_in_node_tree(node):
+    """return True only if mix node is higher in tree"""
+    node_type = 'MIX_RGB'
+    if node.type == node_type:
+        return True
+    elif node.type == 'AMBIENT_OCCLUSION':
+        return False
+    else:
+        for input_socket in node.inputs:
+            if input_socket.is_linked:
+                from_node = input_socket.links[0].from_node
+                if is_mixnode_in_node_tree(from_node):
+                    return True
+        return False
 
-    def is_mixnode_in_node_tree(node):
-        """return True only if mix node is higher in tree"""
-        node_type = 'MIX_RGB'
-        if node.type == node_type:
-            return True
-        elif node.type == 'AMBIENT_OCCLUSION':
-            return False
-        else:
-            for input_socket in node.inputs:
-                if input_socket.is_linked:
-                    from_node = input_socket.links[0].from_node
-                    if is_mixnode_in_node_tree(from_node):
-                        return True
-            return False
+
+def prepare_bake_ao(mat, socket, new_socket):
 
     node = socket.node
 
@@ -334,31 +349,21 @@ def prepare_bake_ao(mat, socket, new_socket):
 def prepare_bake_color(mat, from_socket, new_socket):
     node = from_socket.node
 
-    def is_mixnode_in_node_tree(node):
-        """return True only if mix node is higher in tree"""
-        node_type = 'MIX_RGB'
-        if node.type == node_type:
-            return True
-        elif node.type == 'AMBIENT_OCCLUSION':
-            return False
-        else:
-            for input_socket in node.inputs:
-                if input_socket.is_linked:
-                    from_node = input_socket.links[0].from_node
-                    if is_mixnode_in_node_tree(from_node):
-                        return True
-            return False
-
     # find and unlink AO trees in tagged nodes
     for node in mat.node_tree.nodes:
         if node.type == 'MIX_RGB' and NODE_TAG in node.keys():
-            for node_input in node.inputs[1:]:
+            for i, node_input in enumerate(node.inputs[1:]):
                 if node_input.is_linked:
                     from_node = node_input.links[0].from_node
                     if not is_mixnode_in_node_tree(from_node):
                         if is_node_type_in_node_tree(mat, from_node, 'AMBIENT_OCCLUSION'):
-                            node_input.default_value = (1, 1, 1, 1)
                             mat.node_tree.links.remove(node_input.links[0])
+
+                            # if 'Fac' not linked, set to 0 or 1
+                            fac_in = node.inputs[0]
+                            if not fac_in.is_linked:
+                                fac_in.default_value = 0 if i == 1 else 1
+
     mat.node_tree.links.new(from_socket, new_socket)
 
 
@@ -446,14 +451,19 @@ def prepare_bake(mat, socket, new_socket, input_socket_name):
 
         if input_socket_name == 'Ambient Occlusion':
             # AO: remove all non-ao branches
-            for n in mat.node_tree.nodes:
-                if n.type == 'MIX_RGB' and NODE_TAG in n.keys():
-                    for n_input in n.inputs[1:]:
-                        if n_input.is_linked:
-                            from_n = n_input.links[0].from_node
-                            if not is_node_type_in_node_tree(mat, from_n, 'AMBIENT_OCCLUSION'):
-                                n_input.default_value = (1, 1, 1, 1)
-                                mat.node_tree.links.remove(n_input.links[0])
+            for tmp_node in mat.node_tree.nodes:
+                if tmp_node.type == 'MIX_RGB' and NODE_TAG in tmp_node.keys():
+                    for i, node_input in enumerate(tmp_node.inputs[1:]):
+                        if node_input.is_linked:
+                            from_node = node_input.links[0].from_node
+                            if not is_node_type_in_node_tree(mat, from_node, 'AMBIENT_OCCLUSION'):
+                                mat.node_tree.links.remove(node_input.links[0])
+
+                                # if 'Fac' not linked, set to 0 or 1
+                                fac_in = tmp_node.inputs[0]
+                                if not fac_in.is_linked:
+                                    fac_in.default_value = 0 if i == 1 else 1
+
             # AO: link ao branch
             for input_socket in node.inputs:
                 if input_socket.type == 'RGBA':
@@ -581,6 +591,9 @@ def get_only_meshes(objects):
 
 
 def get_active_outputs(objects):
+    if not type(objects) == type(list()):
+        objects = [objects]
+
     active_outputs = []
     for obj in objects:
         for mat_slot in obj.material_slots:
@@ -593,6 +606,9 @@ def get_active_outputs(objects):
 
 
 def get_all_material_outputs(objects):
+    if not type(objects) == type(list()):
+        objects = [objects]
+
     outputs = {}
     for obj in objects:
         for mat_slot in obj.material_slots:
@@ -609,6 +625,9 @@ def get_all_material_outputs(objects):
 
 
 def set_material_outputs_target_to_all(objects):
+    if not type(objects) == type(list()):
+        objects = [objects]
+
     for obj in objects:
         for mat_slot in obj.material_slots:
             if mat_slot.material:
@@ -617,28 +636,7 @@ def set_material_outputs_target_to_all(objects):
                         node.target = 'ALL'
 
 
-def get_value_list(material, node, value_name):
-    value_list = []
-    for n in material.node_tree.nodes:
-        n_type = n.type
-        if n_type in BSDF_NODES:
-            if are_nodes_connected(n, node):
-                if value_name == 'Color' and n_type == 'BSDF_PRINCIPLED':
-                    tmp_value_name = 'Base Color'
-                else:
-                    tmp_value_name = value_name
-
-                if tmp_value_name in n.inputs.keys():
-                    if n.inputs[tmp_value_name].type == 'RGBA':
-                        [r, g, b, a] = n.inputs[tmp_value_name].default_value
-                        value_list.append([r, g, b, a])
-                    else:
-                        value_list.append(
-                            n.inputs[value_name].default_value)
-    return value_list
-
-
-def prepare_material_for_bake(material):
+def prepare_material_for_bake(material, do_ungroup_values=True):
     mat = material
 
     location_list = []
@@ -658,7 +656,8 @@ def prepare_material_for_bake(material):
 
     # Ungroup all groups in selected nodes
     group_nodes = [n for n in selected_nodes if n.type == 'GROUP']
-    selected_nodes = ungroup_nodes(mat, group_nodes)
+    selected_nodes = ungroup_nodes(
+        mat, group_nodes, do_ungroup_values=do_ungroup_values)
 
     # TAG all selected nodes for clean up
     for node in selected_nodes:
@@ -688,34 +687,39 @@ def prepare_material_for_bake(material):
 
 
 def get_joblist_from_object(obj):
-    joblist = []
+    joblist = dict()
     settings = bpy.context.scene.principled_baker_settings
 
-    temp_nodes = []
     for mat_slot in obj.material_slots:
         if mat_slot.material:
             mat = mat_slot.material
-            prepare_material_for_bake(mat)
+            prepare_material_for_bake(mat, do_ungroup_values=False)
 
-            # add to joblist if values differ
-            if not MATERIAL_TAG in mat.keys():
-                material_output = None
-                for node in mat.node_tree.nodes:
-                    if node.type == "OUTPUT_MATERIAL" and NODE_TAG in node.keys():
-                        material_output = node
+    # add to joblist if values differ
+    if settings.bake_mode == 'BATCH':
+        value_list = []
 
-                if material_output:
-                    for value_name in NODE_INPUTS:
-                        if value_name not in joblist:
-                            if value_name not in ['Subsurface Radius', 'Normal', 'Clearcoat Normal', 'Tangent']:
-                                value_list = []
-                                value_list.extend(get_value_list(
-                                    mat, material_output, value_name))
-                                if value_list:
-                                    if not is_list_equal(value_list):
-                                        joblist.append(value_name)
+        for value_name in NODE_INPUTS:
+            value_list.clear()
+            if value_name not in joblist and value_name not in ['Subsurface Radius', 'Normal', 'Clearcoat Normal', 'Tangent']:
 
-    # search material for jobs
+                for mat_slot in obj.material_slots:
+                    if mat_slot.material:
+                        mat = mat_slot.material
+
+                        material_output = None
+                        for node in mat.node_tree.nodes:
+                            if node.type == "OUTPUT_MATERIAL" and NODE_TAG in node.keys():
+                                material_output = node
+
+                        if material_output:
+                            value_list.extend(get_value_list_from_bsdf_nodes_in_material(
+                                mat, material_output, value_name))
+                if value_list:
+                    if not is_list_equal(value_list):
+                        joblist[value_name] = True
+
+    # search material for jobs by connected node types
     for mat_slot in obj.material_slots:
         if mat_slot.material:
             mat = mat_slot.material
@@ -728,25 +732,25 @@ def get_joblist_from_object(obj):
                     # add special cases:
                     # Alpha node: Transparent
                     if is_node_type_in_node_tree(mat, material_output, 'BSDF_TRANSPARENT'):
-                        if not 'Alpha' in joblist:
-                            joblist.append('Alpha')
+                        # if not 'Alpha' in joblist:
+                        joblist['Alpha'] = True
 
                     # Alpha for nodes: Translucent, Glass
                     for alpha_name, n_type in ALPHA_NODES.items():
                         if is_node_type_in_node_tree(mat, material_output, n_type):
-                            if not alpha_name in joblist:
-                                joblist.append(alpha_name)
+                            # if not alpha_name in joblist:
+                            joblist[alpha_name] = True
 
                     # Emission
                     if is_node_type_in_node_tree(mat, material_output, 'EMISSION'):
-                        if not 'Emission' in joblist:
-                            joblist.append('Emission')
+                        # if not 'Emission' in joblist:
+                        joblist['Emission'] = True
 
                     # AO - 2.80 only
                     if is_2_80:
                         if is_node_type_in_node_tree(mat, material_output, 'AMBIENT_OCCLUSION'):
-                            if not 'Ambient Occlusion' in joblist:
-                                joblist.append('Ambient Occlusion')
+                            # if not 'Ambient Occlusion' in joblist:
+                            joblist['Ambient Occlusion'] = True
 
                     # Displacement
                     socket_name = 'Displacement'
@@ -755,14 +759,14 @@ def get_joblist_from_object(obj):
                             if node.type == 'DISPLACEMENT':
                                 if node.inputs['Height'].is_linked:
                                     if are_nodes_connected(node, material_output):
-                                        if not socket_name in joblist:
-                                            joblist.append(socket_name)
+                                        # if not socket_name in joblist:
+                                        joblist[socket_name] = True
 
                     # Bump
                     socket_name = 'Bump'
                     if settings.use_Bump and is_node_type_in_node_tree(mat, material_output, 'BUMP'):
                         if not socket_name in joblist:
-                            joblist.append(socket_name)
+                            joblist[socket_name] = True
 
                     # BSDF nodes
                     for node in mat.node_tree.nodes:
@@ -774,13 +778,13 @@ def get_joblist_from_object(obj):
                                         if socket.is_linked:
                                             if are_nodes_connected(node, material_output):
                                                 socket_name = 'Color' if socket_name == 'Base Color' else socket_name
-                                                if not socket_name in joblist:
-                                                    joblist.append(socket_name)
+                                                # if not socket_name in joblist:
+                                                joblist[socket_name] = True
 
     # force bake of Color, if user wants alpha in color
     if settings.use_alpha_to_color and settings.color_mode == 'RGBA':
-        if not 'Color' in joblist:
-            joblist.append('Color')
+        # if not 'Color' in joblist:
+        joblist['Color'] = True
 
     # Clean up! - delete temp nodes
     for mat_slot in obj.material_slots:
@@ -791,7 +795,7 @@ def get_joblist_from_object(obj):
 
 
 def get_joblist_from_objects(objs):
-    joblist = []
+    joblist = dict()
     settings = bpy.context.scene.principled_baker_settings
 
     if settings.bake_mode == 'SELECTED_TO_ACTIVE':
@@ -803,28 +807,62 @@ def get_joblist_from_objects(objs):
             if not has_material(obj):
                 return ["Normal"]
 
+    # add to joblist if values differ
+    if not settings.bake_mode == 'BATCH':
+        for obj in objs:
+            for mat_slot in obj.material_slots:
+                if mat_slot.material:
+                    mat = mat_slot.material
+                    prepare_material_for_bake(mat, do_ungroup_values=False)
+
+        value_list = []
+        for value_name in NODE_INPUTS:
+            value_list.clear()
+            if value_name not in joblist and value_name not in ['Subsurface Radius', 'Normal', 'Clearcoat Normal', 'Tangent']:
+                for obj in objs:
+                    for mat_slot in obj.material_slots:
+                        if mat_slot.material:
+                            mat = mat_slot.material
+
+                        material_output = None
+                        for node in mat.node_tree.nodes:
+                            if node.type == "OUTPUT_MATERIAL" and NODE_TAG in node.keys():
+                                material_output = node
+
+                        if material_output:
+                            value_list.extend(get_value_list_from_bsdf_nodes_in_material(
+                                mat, material_output, value_name))
+                if value_list:
+                    if not is_list_equal(value_list):
+                        joblist[value_name] = True
+
+        # Clean up! - delete temp nodes
+        for mat_slot in obj.material_slots:
+            if mat_slot.material:
+                delete_tagged_nodes(mat_slot.material, NODE_TAG)
+
     for obj in objs:
         for job in get_joblist_from_object(obj):
-            if job not in joblist:
-                joblist.append(job)
+            # if job not in joblist:
+            joblist[job] = True
     return joblist
 
 
 def get_joblist_manual():
-    joblist = []
+    joblist = dict()
     settings = bpy.context.scene.principled_baker_settings
     bakelist = bpy.context.scene.principled_baker_bakelist
 
     for job_name, data in bakelist.items():
         if data.do_bake:
-            joblist.append(job_name)
+            joblist[job_name] = True
 
     # force bake of Color, if user wants alpha in color
     if settings.use_alpha_to_color and settings.color_mode == 'RGBA':
         if 'Color' not in joblist:
-            joblist.append('Color')
+            joblist['Color'] = True
         if 'Alpha' not in joblist:
-            joblist.append('Alpha')
+            joblist['Alpha'] = True
 
     return joblist
 
@@ -970,7 +1008,7 @@ def duplicate_nodes(mat, nodes, keep_inputs=False):
     return list(new_nodes.values())
 
 
-def ungroup_nodes(mat, group_nodes):
+def ungroup_nodes(mat, group_nodes, do_ungroup_values=True):
 
     new_nodes = {}
     val_nodes = []
@@ -1039,24 +1077,25 @@ def ungroup_nodes(mat, group_nodes):
                         group_output_inputs[i] = input
 
             # new value nodes
-            for index, input in enumerate(group_node.inputs):
-                if group_input_outputs[index]:
-                    if not input.is_linked:
-                        val = input.default_value
-                        tmp_node = None
-                        if input.type == 'VALUE':
-                            tmp_node = mat.node_tree.nodes.new(
-                                type="ShaderNodeValue")
-                            tmp_node.outputs[0].default_value = val
-                        elif input.type == 'RGBA':
-                            tmp_node = mat.node_tree.nodes.new(
-                                type="ShaderNodeRGB")
-                            tmp_node.outputs[0].default_value = val
-                        if tmp_node:
-                            val_nodes.append(tmp_node)
-                            from_socket = tmp_node.outputs[0]
-                            to_socket = input
-                            mat.node_tree.links.new(from_socket, to_socket)
+            if do_ungroup_values:
+                for index, input in enumerate(group_node.inputs):
+                    if group_input_outputs[index]:
+                        if not input.is_linked:
+                            val = input.default_value
+                            tmp_node = None
+                            if input.type == 'VALUE':
+                                tmp_node = mat.node_tree.nodes.new(
+                                    type="ShaderNodeValue")
+                                tmp_node.outputs[0].default_value = val
+                            elif input.type == 'RGBA':
+                                tmp_node = mat.node_tree.nodes.new(
+                                    type="ShaderNodeRGB")
+                                tmp_node.outputs[0].default_value = val
+                            if tmp_node:
+                                val_nodes.append(tmp_node)
+                                from_socket = tmp_node.outputs[0]
+                                to_socket = input
+                                mat.node_tree.links.new(from_socket, to_socket)
 
             for output in group_node.outputs:
                 if output.is_linked:
@@ -1119,3 +1158,74 @@ def disable_material_outputs(obj):
             for node in mat_slot.material.node_tree.nodes:
                 if node.type == "OUTPUT_MATERIAL":
                     node.is_active_output = False
+
+
+def get_value_from_node_by_name(node, value_name):
+    tmp_value_name = value_name
+    if value_name == 'Color' and node.type == 'BSDF_PRINCIPLED':
+        tmp_value_name = "Base Color"
+
+    if tmp_value_name in node.inputs.keys():
+        if node.inputs[tmp_value_name].type == 'RGBA':
+            r, g, b, a = node.inputs[tmp_value_name].default_value
+            return [r, g, b, a]
+        else:
+            return node.inputs[value_name].default_value
+
+
+def get_value_list_from_bsdf_nodes_in_material(material, node, value_name):
+    value_list = []
+    for n in material.node_tree.nodes:
+        if n.type in BSDF_NODES:
+            if are_nodes_connected(n, node):
+                val = get_value_from_node_by_name(n, value_name)
+                if not val == None:
+                    value_list.append(val)
+    return value_list
+
+
+def get_value_list(node, value_name):
+    """Return a list of all values by value name in a node tree starting from node.        
+    Values from Normal Map are exclued."""
+
+    value_list = []
+
+    def find_values(node, value_name):
+        if not node.type == 'NORMAL_MAP':
+            val = get_value_from_node_by_name(node, value_name)
+            if not val == None:
+                value_list.append(val)
+
+            for socket in node.inputs:
+                if socket.is_linked:
+                    from_node = socket.links[0].from_node
+                    find_values(from_node, value_name)
+
+    find_values(node, value_name)
+    return value_list
+
+
+def get_value_list_from_node_types(node, value_name, node_types):
+    """Return a list of all values by value name with node types in a node tree starting from node.        
+    Values from Normal Map are exclued."""
+
+    value_list = []
+
+    def find_values(node, value_name, node_types):
+        if value_name == 'Color' and node.type == 'BSDF_PRINCIPLED':
+            tmp_value_name = 'Base Color'
+        else:
+            tmp_value_name = value_name
+
+        if node.type in node_types and tmp_value_name in node.inputs.keys():
+            val = get_value_from_node_by_name(node.inputs[tmp_value_name])
+            if not val == None:
+                value_list.append(val)
+
+        for socket in node.inputs:
+            if socket.is_linked:
+                from_node = socket.links[0].from_node
+                find_values(from_node, value_name, node_types)
+
+    find_values(node, value_name, node_types)
+    return value_list

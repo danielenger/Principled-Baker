@@ -18,23 +18,27 @@ class PBAKER_OT_bake(bpy.types.Operator):
     def extend_joblist(self, joblist):
         if self.settings.use_Diffuse:
             if "Diffuse" not in joblist:
-                joblist.append("Diffuse")
+                joblist["Diffuse"] = True
         if self.settings.use_invert_roughness:
             if "Glossiness" not in joblist:
-                joblist.append("Roughness")
+                joblist["Roughness"] = True
         if self.settings.use_Bump:
             if "Bump" not in joblist:
-                joblist.append("Bump")
+                joblist["Bump"] = True
         if self.settings.use_material_id:
             if "Material ID" not in joblist:
-                joblist.append("Material ID")
+                joblist["Material ID"] = True
         if self.settings.use_wireframe:
             if "Wireframe" not in joblist:
-                joblist.append("Wireframe")
+                joblist["Wireframe"] = True
 
     def get_suffix(self):
         suffixlist = bpy.context.scene.principled_baker_suffixlist
         suffix = suffixlist[self.job_name]['suffix']
+
+        if self.job_name == "Vertex Color":
+            suffix += self.suffix_extension
+
         if self.settings.suffix_text_mod == 'lower':
             suffix = suffix.lower()
         elif self.settings.suffix_text_mod == 'upper':
@@ -74,7 +78,7 @@ class PBAKER_OT_bake(bpy.types.Operator):
                         node_types = 'BSDF_TRANSPARENT'
                     else:
                         node_types = ALPHA_NODES[self.job_name]
-                    color_list = self.get_value_list_from_node_types(
+                    color_list = get_value_list_from_node_types(
                         mat_out, 'Color', node_types)
                     if len(color_list) >= 1:
                         self.new_node_colors[self.job_name] = color_list[0]
@@ -148,21 +152,23 @@ class PBAKER_OT_bake(bpy.types.Operator):
         principled_node.location = (10.0, 300.0)
 
         # copy settings to new principled_node
-        for k, v in self.new_principled_node_settings.items():
-            if k == 'Color':
-                k = 'Base Color'
-            principled_node.inputs[k].default_value = v
+        for name, val in self.new_principled_node_settings.items():
+            if name == 'Color':
+                name = 'Base Color'
+            if not val == None:
+                principled_node.inputs[name].default_value = val
 
         mat.node_tree.links.new(
             principled_node.outputs['BSDF'], mat_output.inputs['Surface'])
         return mat
 
+    # TODO bug: ignores nodes in groups
     def get_new_principled_node_settings(self, objs):
         """returns dictionary with equal node values in all materials in all objects, eg. metal, roughness"""
 
         n_pri_node_settings = {}
         for obj in objs:
-            for value_name in NODE_INPUTS:
+            for value_name in NODE_INPUTS + ["Base Color"]:
                 if value_name not in ['Subsurface Radius', 'Normal', 'Clearcoat Normal', 'Tangent']:
                     value_list = []
                     for mat_slot in obj.material_slots:
@@ -170,7 +176,7 @@ class PBAKER_OT_bake(bpy.types.Operator):
                             mat = mat_slot.material
                             if not MATERIAL_TAG in mat.keys():
                                 material_output = get_active_output(mat)
-                                tmp_val_list = self.get_value_list(
+                                tmp_val_list = get_value_list(
                                     material_output, value_name)
                                 value_list.extend(tmp_val_list)
 
@@ -384,24 +390,12 @@ class PBAKER_OT_bake(bpy.types.Operator):
                     new_mat.node_tree.links.new(ao_image_node.outputs["Color"],
                                                 mix_node.inputs['Color2'])
 
-            elif name in NOT_TO_LINK_NODES:
+            elif name in NOT_TO_LINK_NODES or name.startswith("Vertex Color"):
                 pass  # skip some
 
             else:
                 new_mat.node_tree.links.new(image_node.outputs['Color'],
                                             principled_node.inputs[name])
-
-    def new_pb_emission_node(self, material, color=[0, 0, 0, 1]):
-        node = material.node_tree.nodes.new(type='ShaderNodeEmission')
-        node.inputs['Color'].default_value = color  # [0, 0, 0, 1]
-        node[NODE_TAG] = 1
-        return node
-
-    def new_pb_output_node(self, material):
-        node = material.node_tree.nodes.new(type='ShaderNodeOutputMaterial')
-        node.is_active_output = True
-        node[NODE_TAG] = 1
-        return node
 
     def is_image_file(self, image_file_name):
         cwd = os.path.normpath(os.path.dirname(bpy.data.filepath))
@@ -545,6 +539,9 @@ class PBAKER_OT_bake(bpy.types.Operator):
             self.new_images["Glossiness"] = gloss_image
 
     def can_bake(self, objects):
+        if not type(objects) == type(list()):
+            objects = [objects]
+
         for obj in objects:
             # enabled for rendering?
             if obj.hide_render:
@@ -557,12 +554,12 @@ class PBAKER_OT_bake(bpy.types.Operator):
                     self.report(
                         {'INFO'}, "baking cancelled. '{0}' Material missing, Material Output missing, or Material Output input missing.".format(obj.name))
                     return False
-            # has vertex color?
-            if not self.settings.bake_mode == 'BATCH':
-                if self.settings.use_vertex_color and len(obj.data.vertex_colors) == 0:
-                    self.report(
-                        {'INFO'}, "baking cancelled. '{0}' has no Vertex Color.".format(obj.name))
-                    return False
+            # # has vertex color?
+            # if not self.settings.bake_mode == 'BATCH':
+            #     if self.settings.use_vertex_color and len(obj.data.vertex_colors) == 0:
+            #         self.report(
+            #             {'INFO'}, "baking cancelled. '{0}' has no Vertex Color.".format(obj.name))
+            #         return False
             # empty material slots?
             for mat_slot in obj.material_slots:
                 if not mat_slot.material:
@@ -574,8 +571,8 @@ class PBAKER_OT_bake(bpy.types.Operator):
     def prepare_objects_for_bake_matid(self, objects):
 
         def create_temp_nodes(mat, color):
-            pb_output_node = self.new_pb_output_node(mat)
-            pb_emission_node = self.new_pb_emission_node(mat, color)
+            pb_output_node = new_pb_output_node(mat)
+            pb_emission_node = new_pb_emission_node(mat, color)
             socket_to_pb_emission_node_color = pb_emission_node.inputs['Color']
 
             # activate temp output
@@ -587,6 +584,9 @@ class PBAKER_OT_bake(bpy.types.Operator):
             # link pb_emission_node to material_output
             mat.node_tree.links.new(
                 pb_emission_node.outputs[0], pb_output_node.inputs['Surface'])
+
+        if not type(objects) == type(list()):
+            objects = [objects]
 
         materials = []
         for obj in objects:
@@ -618,14 +618,17 @@ class PBAKER_OT_bake(bpy.types.Operator):
 
                 create_temp_nodes(mat, color)
 
-    def prepare_objects_for_bake_vertex_color(self, objects):
+    def prepare_objects_for_bake_vertex_color(self, objects, vertex_color):
+        if not type(objects) == type(list()):
+            objects = [objects]
+
         for obj in objects:
             for mat_slot in obj.material_slots:
                 if mat_slot.material:
                     mat = mat_slot.material
 
-                    pb_output_node = self.new_pb_output_node(mat)
-                    pb_emission_node = self.new_pb_emission_node(mat)
+                    pb_output_node = new_pb_output_node(mat)
+                    pb_emission_node = new_pb_emission_node(mat)
                     socket_to_pb_emission_node_color = pb_emission_node.inputs['Color']
 
                     # activate temp output
@@ -634,13 +637,11 @@ class PBAKER_OT_bake(bpy.types.Operator):
                         material_output.is_active_output = False
                     pb_output_node.is_active_output = True
 
-                    for name, vert_col in obj.data.vertex_colors.items():
-                        if vert_col.active_render:
-                            active_vert_col = name
                     attr_node = mat.node_tree.nodes.new(
                         type='ShaderNodeAttribute')
                     attr_node[NODE_TAG] = 1  # tag for clean up
-                    attr_node.attribute_name = active_vert_col
+                    # attr_node.attribute_name = active_vert_col
+                    attr_node.attribute_name = vertex_color.name
                     mat.node_tree.links.new(
                         attr_node.outputs['Color'], socket_to_pb_emission_node_color)
 
@@ -649,13 +650,16 @@ class PBAKER_OT_bake(bpy.types.Operator):
                         pb_emission_node.outputs[0], pb_output_node.inputs['Surface'])
 
     def prepare_objects_for_bake_wireframe(self, objects):
+        if not type(objects) == type(list()):
+            objects = [objects]
+
         for obj in objects:
             for mat_slot in obj.material_slots:
                 if mat_slot.material:
                     mat = mat_slot.material
 
-                    pb_output_node = self.new_pb_output_node(mat)
-                    pb_emission_node = self.new_pb_emission_node(mat)
+                    pb_output_node = new_pb_output_node(mat)
+                    pb_emission_node = new_pb_emission_node(mat)
                     socket_to_pb_emission_node_color = pb_emission_node.inputs['Color']
 
                     # activate temp output
@@ -680,6 +684,9 @@ class PBAKER_OT_bake(bpy.types.Operator):
                         pb_emission_node.outputs[0], pb_output_node.inputs['Surface'])
 
     def prepare_objects_for_bake(self, objects):
+        if not type(objects) == type(list()):
+            objects = [objects]
+
         for obj in objects:
             for mat_slot in obj.material_slots:
                 if mat_slot.material:
@@ -708,8 +715,8 @@ class PBAKER_OT_bake(bpy.types.Operator):
         for node in mat.node_tree.nodes:
             if node.type == "OUTPUT_MATERIAL" and NODE_TAG in node.keys():
                 material_output = node
-        pb_output_node = self.new_pb_output_node(mat)
-        pb_emission_node = self.new_pb_emission_node(mat, [1, 1, 1, 1])
+        pb_output_node = new_pb_output_node(mat)
+        pb_emission_node = new_pb_emission_node(mat, [1, 1, 1, 1])
         pb_output_node.location.x = active_output.location.x
         pb_emission_node.location.x = active_output.location.x
 
@@ -791,52 +798,6 @@ class PBAKER_OT_bake(bpy.types.Operator):
             if NODE_TAG in node.keys():
                 node.parent = p_baker_frame
 
-    def get_value_list(self, node, value_name):
-        value_list = []
-
-        def find_values(node, value_name):
-            if not node.type == 'NORMAL_MAP':
-                if value_name == 'Color' and node.type == 'BSDF_PRINCIPLED':
-                    tmp_value_name = 'Base Color'
-                else:
-                    tmp_value_name = value_name
-                if tmp_value_name in node.inputs.keys():
-                    if node.inputs[tmp_value_name].type == 'RGBA':
-                        [r, g, b, a] = node.inputs[tmp_value_name].default_value
-                        value_list.append([r, g, b, a])
-                    else:
-                        value_list.append(
-                            node.inputs[value_name].default_value)
-
-                for socket in node.inputs:
-                    if socket.is_linked:
-                        from_node = socket.links[0].from_node
-                        find_values(from_node, value_name)
-        find_values(node, value_name)
-        return value_list
-
-    def get_value_list_from_node_types(self, node, value_name, node_types):
-        value_list = []
-
-        def find_values(node, value_name, node_types):
-            if value_name == 'Color' and node.type == 'BSDF_PRINCIPLED':
-                tmp_value_name = 'Base Color'
-            else:
-                tmp_value_name = value_name
-            if node.type in node_types and tmp_value_name in node.inputs.keys():
-                if node.inputs[tmp_value_name].type == 'RGBA':
-                    [r, g, b, a] = node.inputs[tmp_value_name].default_value
-                    value_list.append([r, g, b, a])
-                else:
-                    value_list.append(node.inputs[value_name].default_value)
-
-            for socket in node.inputs:
-                if socket.is_linked:
-                    from_node = socket.links[0].from_node
-                    find_values(from_node, value_name, node_types)
-        find_values(node, value_name, node_types)
-        return value_list
-
     def smart_project(self):
         bpy.ops.uv.smart_project(angle_limit=self.settings.angle_limit,
                                  island_margin=self.settings.island_margin,
@@ -868,7 +829,7 @@ class PBAKER_OT_bake(bpy.types.Operator):
             # select_set(obj, True)
 
         if not type(objs) == type(list()):
-            objs = list(objs)
+            objs = [objs]
 
         for obj in objs:
             if not combined:
@@ -929,10 +890,6 @@ class PBAKER_OT_bake(bpy.types.Operator):
             for obj in self.auto_smooth_list:
                 obj.data.use_auto_smooth = self.auto_smooth_list[obj]
 
-        # Clean up! - Re-Select objects
-        for obj in self.orig_selected_objects:
-            select_set(obj, True)
-
         # Render Engine - Clean up!
         if self.prefs.switch_to_cycles:
             bpy.context.scene.render.engine = self.render_engine
@@ -940,6 +897,13 @@ class PBAKER_OT_bake(bpy.types.Operator):
 
         # Samples
         bpy.context.scene.cycles.samples = self.org_samples
+
+        # Restore orig selection
+        for obj in bpy.context.selected_objects:
+            select_set(obj, False)
+        for obj in self.selected_objects:
+            select_set(obj, True)
+        bpy.context.view_layer.objects.active = self.active_object
 
     def select_uv_map(self, obj):
         # 2.79/2.80
@@ -1208,6 +1172,7 @@ class PBAKER_OT_bake(bpy.types.Operator):
 
         self.settings = context.scene.principled_baker_settings
         self.render_settings = context.scene.render.bake
+        # self.selected_objects = bpy.context.selected_objects
         self.selected_objects = bpy.context.selected_objects
         self.texture_folder = ""
 
@@ -1275,7 +1240,6 @@ class PBAKER_OT_bake(bpy.types.Operator):
             bpy.ops.principled_baker_suffixlist.init()
 
         # Select only meshes
-        self.orig_selected_objects = bpy.context.selected_objects
         for obj in self.selected_objects:
             if not obj.type == 'MESH':
                 select_set(obj, False)
@@ -1300,15 +1264,24 @@ class PBAKER_OT_bake(bpy.types.Operator):
         bake_objects = []
         bake_objects = get_only_meshes(self.selected_objects)
 
+        # Joblist is a dictionary because of multiple vertex colors
+        self.joblist = dict()
+
         self.job_name = ""  # current bake job
+
+        # current suffix extension used for vertex colors only
+        self.suffix_extension = ""
 
         # exclude active object from selected objects
         if self.settings.bake_mode == 'SELECTED_TO_ACTIVE':
             if self.active_object in bake_objects:
                 bake_objects.remove(self.active_object)
 
-        self.new_principled_node_settings = self.get_new_principled_node_settings(
-            bake_objects)
+        # store equal node values for the Principled BSDF node in new material
+        self.new_principled_node_settings = {}
+        if not self.settings.bake_mode == 'BATCH':
+            self.new_principled_node_settings = self.get_new_principled_node_settings(
+                bake_objects)
 
         ########
         # Bake Single/Batch:
@@ -1325,46 +1298,70 @@ class PBAKER_OT_bake(bpy.types.Operator):
 
             for obj in bake_objects:
 
+                self.new_principled_node_settings.clear()
+                self.new_principled_node_settings = self.get_new_principled_node_settings([
+                                                                                          obj])
+
                 self.new_images.clear()
 
                 # Select only one
                 select_set(obj, True)
 
-                obj_list = [obj]
-
                 # Can bake?
-                if not self.can_bake(obj_list):
+                # if not self.can_bake(obj):
+                if not self.can_bake(obj):
                     continue
 
                 # Populate joblist
-                joblist = []
+                self.joblist.clear()
+
                 if self.settings.use_autodetect:
-                    joblist = get_joblist_from_object(obj)
+                    self.joblist = get_joblist_from_object(obj)
                 else:
-                    joblist = get_joblist_manual()
+                    self.joblist = get_joblist_manual()
 
-                self.extend_joblist(joblist)
+                self.extend_joblist(self.joblist)
 
+                # Vertext Colors
                 if self.settings.use_vertex_color:
                     if len(obj.data.vertex_colors) > 0:
-                        if "Vertex Color" not in joblist:
-                            joblist.append("Vertex Color")
+                        vert_colors = []
+                        if self.settings.bake_vertex_colors == 'ALL':
+                            for obj in bake_objects:
+                                for vcol in obj.data.vertex_colors:
+                                    vert_colors.append(vcol)
+                        elif self.settings.bake_vertex_colors == 'SELECTED':
+                            for obj in bake_objects:
+                                vert_colors.append(
+                                    obj.data.vertex_colors.active)
+                        elif self.settings.bake_vertex_colors == 'ACTIVE_RENDER':
+                            for name, v_col in obj.data.vertex_colors.items():
+                                if v_col.active_render:
+                                    vert_colors.append(v_col)
+                                    break
+                        else:
+                            index = int(self.settings.bake_vertex_colors) - 1
+                            if index < len(obj.data.vertex_colors):
+                                vert_colors.append(
+                                    obj.data.vertex_colors[index])
+                        if vert_colors:
+                            self.joblist["Vertex Color"] = vert_colors
                     else:
                         self.report(
                             {'INFO'}, "Vertex Color baking skipped. '{0}' has no Vertex Color".format(obj.name))
 
                 # empty joblist -> nothing to do
-                if not joblist:
+                if not self.joblist:
                     self.report(
                         {'INFO'}, "Nothing to do for {}.".format(obj.name))
                     continue
 
                 # material outpus for later clean up
-                active_outputs = get_active_outputs(obj_list)
-                all_material_outputs = get_all_material_outputs(obj_list)
+                active_outputs = get_active_outputs(obj)
+                all_material_outputs = get_all_material_outputs(obj)
                 # 2.80
-                if not is_2_79:
-                    set_material_outputs_target_to_all(obj_list)
+                if is_2_80:
+                    set_material_outputs_target_to_all(obj)
 
                 # Auto UV project
                 if not self.settings.auto_uv_project == 'OFF':
@@ -1372,14 +1369,13 @@ class PBAKER_OT_bake(bpy.types.Operator):
 
                 # UV Map selection
                 orig_uv_layers_active_index = obj.data.uv_layers.active_index
-                # if not self.settings.select_uv_map == 'SELECTED':
                 self.select_uv_map(obj)
 
                 # (optional) new material
                 new_mat = None
                 if self.settings.make_new_material or self.settings.duplicate_objects:
                     # guess colors for Transparent, Translucent, Glass, Emission
-                    for self.job_name in joblist:
+                    for self.job_name in self.joblist:
                         if self.job_name in self.new_node_colors.keys():
                             self.guess_colors(obj)
                     # new material
@@ -1390,80 +1386,103 @@ class PBAKER_OT_bake(bpy.types.Operator):
                 self.set_texture_folder(obj.name)
 
                 # Go through joblist
-                for self.job_name in joblist:
+                for self.job_name, b_list in self.joblist.items():
 
-                    # skip, if no overwrite and image exists. load existing image
-                    image_file_name = self.get_image_file_name(obj.name)
-                    if not self.settings.use_overwrite and self.is_image_file(image_file_name):
-                        self.report({'INFO'}, "baking skipped for '{0}'. File exists.".format(
-                            self.get_image_file_name(obj.name)))
+                    # skip, if job is not "Vertex Color" and has no material
+                    if not self.job_name == "Vertex Color":
+                        skip = any(not has_material(obj)
+                                   for obj in bake_objects)
+                        if skip:
+                            self.report(
+                                {'INFO'}, "{0} baking skipped for '{1}'".format(self.job_name, obj.name))
+                            continue
 
-                        # load image for new material
-                        self.new_images[self.job_name] = self.load_image(
-                            image_file_name)
+                    if not b_list:
+                        continue
+                    elif b_list == True:
+                        b_list = [None]
 
-                        continue  # skip job
+                    for vert_col in b_list:
 
-                    # else: do bake
+                        self.suffix_extension = ""
+                        if self.job_name == 'Vertex Color':
+                            self.suffix_extension = vert_col.name
 
-                    # set individual samples
-                    self.set_samples()
+                        # skip, if no overwrite and image exists. load existing image
+                        image_file_name = self.get_image_file_name(obj.name)
+                        if not self.settings.use_overwrite and self.is_image_file(image_file_name):
+                            self.report({'INFO'}, "baking skipped for '{0}'. File exists.".format(
+                                self.get_image_file_name(obj.name)))
 
-                    # image to bake on
-                    image = self.new_bake_image(obj.name)
+                            # load image for new material
+                            self.new_images[self.job_name] = self.load_image(
+                                image_file_name)
 
-                    # append image to image dict for new material
-                    self.new_images[self.job_name] = image
+                            continue  # skip job
 
-                    # temp material for vertex color
-                    if self.settings.use_vertex_color:
-                        if not has_material(obj):
-                            add_temp_material(obj)
+                        # else: do bake
 
-                    # Prepare materials
-                    if self.job_name == 'Material ID':
-                        self.prepare_objects_for_bake_matid(obj_list)
-                    elif self.job_name == 'Vertex Color':
-                        self.prepare_objects_for_bake_vertex_color(obj_list)
-                    elif self.job_name == 'Wireframe':
-                        self.prepare_objects_for_bake_wireframe(obj_list)
-                    elif self.job_name == 'Diffuse':
-                        pass  # prepare nothing
-                    else:
-                        self.prepare_objects_for_bake(obj_list)
+                        # set individual samples
+                        self.set_samples()
 
-                    # image nodes to bake
-                    for mat_slot in obj.material_slots:
-                        if mat_slot.material:
-                            self.create_bake_image_node(
-                                mat_slot.material, image)
+                        # temp material for vertex color
+                        if self.settings.use_vertex_color:
+                            if not has_material(obj):
+                                add_temp_material(obj)
 
-                    # Bake and Save image!
-                    self.bake_and_save(
-                        image, bake_type=get_bake_type(self.job_name))
+                        # Prepare materials
+                        if self.job_name == 'Material ID':
+                            self.prepare_objects_for_bake_matid(obj)
+                        elif self.job_name == 'Vertex Color':
+                            self.prepare_objects_for_bake_vertex_color(
+                                obj, vert_col)
+                            # self.suffix_extension = vert_col.name
+                        elif self.job_name == 'Wireframe':
+                            self.prepare_objects_for_bake_wireframe(obj)
+                        elif self.job_name == 'Diffuse':
+                            pass  # prepare nothing
+                        else:
+                            self.prepare_objects_for_bake(obj)
 
-                    # Clean up!
-                    # delete temp materials
-                    delete_tagged_materials(obj, MATERIAL_TAG_VERTEX)
+                        # image to bake on
+                        image = self.new_bake_image(obj.name)
 
-                    # delete temp nodes
-                    delete_tagged_nodes_in_object(obj)
+                        # append image to image dict for new material
+                        self.new_images[self.job_name +
+                                        self.suffix_extension] = image
 
-                    # reactivate Material Outputs
-                    disable_material_outputs(obj)
-                    for mat_output in active_outputs:
-                        mat_output.is_active_output = True
+                        # image nodes to bake
+                        for mat_slot in obj.material_slots:
+                            if mat_slot.material:
+                                self.create_bake_image_node(
+                                    mat_slot.material, image)
 
-                    # reselect UV Map
-                    if not self.settings.set_selected_uv_map:
-                        uv_layers = obj.data.uv_textures if is_2_79 else obj.data.uv_layers
-                        uv_layers.active_index = orig_uv_layers_active_index
+                        # Bake and Save image!
+                        self.bake_and_save(
+                            image, bake_type=get_bake_type(self.job_name))
 
-                    # glossiness
-                    self.create_gloss_image(obj.name, image)
+                        # Clean up!
+                        # delete temp materials
+                        delete_tagged_materials(obj, MATERIAL_TAG_VERTEX)
 
-                    # add alpha channel to color
-                    self.alpha_channel_to_color()
+                        # delete temp nodes
+                        delete_tagged_nodes_in_object(obj)
+
+                        # reactivate Material Outputs
+                        disable_material_outputs(obj)
+                        for mat_output in active_outputs:
+                            mat_output.is_active_output = True
+
+                        # reselect UV Map
+                        if not self.settings.set_selected_uv_map:
+                            uv_layers = obj.data.uv_textures if is_2_79 else obj.data.uv_layers
+                            uv_layers.active_index = orig_uv_layers_active_index
+
+                        # glossiness
+                        self.create_gloss_image(obj.name, image)
+
+                        # add alpha channel to color
+                        self.alpha_channel_to_color()
 
                 # jobs DONE
 
@@ -1513,20 +1532,40 @@ class PBAKER_OT_bake(bpy.types.Operator):
                 return {'CANCELLED'}
 
             # Populate joblist
-            joblist = []
+            self.joblist.clear()
             if self.settings.use_autodetect:
-                joblist = get_joblist_from_objects(bake_objects)
+                self.joblist = get_joblist_from_objects(bake_objects)
             else:
-                joblist = get_joblist_manual()
+                self.joblist = get_joblist_manual()
 
-            self.extend_joblist(joblist)
+            self.extend_joblist(self.joblist)
 
+            # Vertext Colors
             if self.settings.use_vertex_color:
-                if "Vertex Color" not in joblist:
-                    joblist.append("Vertex Color")
+                vert_colors = []
+                if self.settings.bake_vertex_colors == 'ALL':
+                    for obj in bake_objects:
+                        for vcol in obj.data.vertex_colors:
+                            vert_colors.append(vcol)
+                elif self.settings.bake_vertex_colors == 'SELECTED':
+                    for obj in bake_objects:
+                        vert_colors.append(
+                            obj.data.vertex_colors.active)
+                elif self.settings.bake_vertex_colors == 'ACTIVE_RENDER':
+                    for name, v_col in obj.data.vertex_colors.items():
+                        if v_col.active_render:
+                            vert_colors.append(v_col)
+                            break
+                else:
+                    index = int(self.settings.bake_vertex_colors) - 1
+                    if index < len(obj.data.vertex_colors):
+                        vert_colors.append(
+                            obj.data.vertex_colors[index])
+                if vert_colors:
+                    self.joblist["Vertex Color"] = vert_colors
 
             # empty joblist -> nothing to do
-            if not joblist:
+            if not self.joblist:
                 self.final_cleanup()
                 self.report({'INFO'}, "Nothing to do.")
                 return {'CANCELLED'}
@@ -1539,7 +1578,7 @@ class PBAKER_OT_bake(bpy.types.Operator):
             active_outputs = get_active_outputs(bake_objects)
             all_material_outputs = get_all_material_outputs(bake_objects)
             # 2.80
-            if not is_2_79:
+            if is_2_80:
                 set_material_outputs_target_to_all(bake_objects)
 
             # Auto UV project
@@ -1549,7 +1588,6 @@ class PBAKER_OT_bake(bpy.types.Operator):
             orig_uv_layers_active_indices = {}
             for obj in bake_objects:
                 orig_uv_layers_active_indices[obj] = obj.data.uv_layers.active_index
-                # if not self.settings.select_uv_map == 'SELECTED':
                 self.select_uv_map(obj)
 
             # (optional) new material
@@ -1561,90 +1599,113 @@ class PBAKER_OT_bake(bpy.types.Operator):
             self.set_texture_folder(self.active_object.name)
 
             # Go through joblist
-            for self.job_name in joblist:
+            # for self.job_name in self.joblist:
+            for self.job_name, b_list in self.joblist.items():
 
-                # skip, if no overwrite and image exists. load existing image
-                image_file_name = self.get_image_file_name(
-                    self.active_object.name)
-                if not self.settings.use_overwrite and self.is_image_file(image_file_name):
-                    self.report({'INFO'}, "baking skipped for '{0}'. File exists.".format(
-                        self.get_image_file_name(obj.name)))
+                # skip, if job is not "Vertex Color" and has no material
+                if not self.job_name == "Vertex Color":
+                    skip = any(not has_material(obj) for obj in bake_objects)
+                    if skip:
+                        self.report(
+                            {'INFO'}, "{0} baking skipped for '{1}'".format(self.job_name, obj.name))
+                        continue
 
-                    # load image for new material
-                    self.new_images[self.job_name] = self.load_image(
-                        image_file_name)
+                if not b_list:
+                    continue
+                elif b_list == True:
+                    b_list = [None]
 
-                    continue  # skip job
+                for vert_col in b_list:
 
-                # else: do bake
+                    self.suffix_extension = ""
+                    if self.job_name == 'Vertex Color':
+                        self.suffix_extension = vert_col.name
 
-                # set individual samples
-                self.set_samples()
+                    # skip, if no overwrite and image exists. load existing image
+                    image_file_name = self.get_image_file_name(
+                        self.active_object.name)
+                    if not self.settings.use_overwrite and self.is_image_file(image_file_name):
+                        self.report({'INFO'}, "baking skipped for '{0}'. File exists.".format(
+                            self.get_image_file_name(obj.name)))
 
-                # image to bake on
-                image = self.new_bake_image(self.active_object.name)
+                        # load image for new material
+                        self.new_images[self.job_name] = self.load_image(
+                            image_file_name)
 
-                # append image to image dict for new material
-                self.new_images[self.job_name] = image
+                        continue  # skip job
 
-                # temp material for vertex color
-                if self.settings.use_vertex_color:
+                    # else: do bake
+
+                    # temp material for vertex color
+                    if self.job_name == "Vertex Color":
+                        for obj in bake_objects:
+                            if not has_material(obj):
+                                add_temp_material(obj)
+
+                    # set individual samples
+                    self.set_samples()
+
+                    # Prepare materials
+                    if self.job_name == 'Material ID':
+                        self.prepare_objects_for_bake_matid(bake_objects)
+                    elif self.job_name == 'Vertex Color':
+                        self.prepare_objects_for_bake_vertex_color(
+                            bake_objects, vert_col)
+                        # self.suffix_extension = vert_col.name
+                    elif self.job_name == 'Wireframe':
+                        self.prepare_objects_for_bake_wireframe(bake_objects)
+                    elif self.job_name == 'Diffuse':
+                        pass  # prepare nothing
+                    else:
+                        self.prepare_objects_for_bake(bake_objects)
+
+                    # image to bake on
+                    image = self.new_bake_image(self.active_object.name)
+
+                    # append image to image dict for new material
+                    self.new_images[self.job_name +
+                                    self.suffix_extension] = image
+
+                    # image nodes to bake
                     for obj in bake_objects:
-                        if not has_material(obj):
-                            add_temp_material(obj)
+                        for mat_slot in obj.material_slots:
+                            if mat_slot.material:
+                                self.create_bake_image_node(
+                                    mat_slot.material, image)
 
-                # Prepare materials
-                if self.job_name == 'Material ID':
-                    self.prepare_objects_for_bake_matid(bake_objects)
-                elif self.job_name == 'Vertex Color':
-                    self.prepare_objects_for_bake_vertex_color(bake_objects)
-                elif self.job_name == 'Wireframe':
-                    self.prepare_objects_for_bake_wireframe(bake_objects)
-                elif self.job_name == 'Diffuse':
-                    pass  # prepare nothing
-                else:
-                    self.prepare_objects_for_bake(bake_objects)
+                    # Bake and Save image!
+                    self.bake_and_save(
+                        image, bake_type=get_bake_type(self.job_name))
 
-                # image nodes to bake
-                for obj in bake_objects:
-                    for mat_slot in obj.material_slots:
-                        if mat_slot.material:
-                            self.create_bake_image_node(
-                                mat_slot.material, image)
+                    # Clean up!
+                    for obj in bake_objects:
+                        # delete temp materials
+                        delete_tagged_materials(obj, MATERIAL_TAG_VERTEX)
 
-                # Bake and Save image!
-                self.bake_and_save(
-                    image, bake_type=get_bake_type(self.job_name))
+                        # delete temp nodes
+                        delete_tagged_nodes_in_object(obj)
 
-                # Clean up!
-                for obj in bake_objects:
-                    # delete temp materials
-                    delete_tagged_materials(obj, MATERIAL_TAG_VERTEX)
+                        # reselect UV Map
+                        if not self.settings.set_selected_uv_map:
+                            uv_layers = obj.data.uv_textures if is_2_79 else obj.data.uv_layers
+                            uv_layers.active_index = orig_uv_layers_active_indices[obj]
 
-                    # delete temp nodes
-                    delete_tagged_nodes_in_object(obj)
-
-                    # reselect UV Map
-                    if not self.settings.set_selected_uv_map:
-                        uv_layers = obj.data.uv_textures if is_2_79 else obj.data.uv_layers
-                        uv_layers.active_index = orig_uv_layers_active_indices[obj]
+                        # reactivate Material Outputs
+                        disable_material_outputs(obj)
 
                     # reactivate Material Outputs
-                    disable_material_outputs(obj)
+                    for mat_output in active_outputs:
+                        mat_output.is_active_output = True
 
-                # reactivate Material Outputs
-                for mat_output in active_outputs:
-                    mat_output.is_active_output = True
+                    # glossiness
+                    self.create_gloss_image(obj.name, image)
 
-                # glossiness
-                self.create_gloss_image(obj.name, image)
+                    # add alpha channel to color
+                    self.alpha_channel_to_color()
 
-                # add alpha channel to color
-                self.alpha_channel_to_color()
-
-                # UPDATE progress report
-                progress += 1/len(joblist)
-                bpy.context.window_manager.progress_update(progress)
+                    # UPDATE progress report
+                    progress += 1/len(self.joblist)
+                    bpy.context.window_manager.progress_update(progress)
 
             # jobs DONE
 
@@ -1702,29 +1763,46 @@ class PBAKER_OT_bake(bpy.types.Operator):
                     return {'CANCELLED'}
 
             # Populate joblist
-            joblist = []
+            # joblist = []
+            self.joblist.clear()
+
             if self.settings.use_autodetect:
-                joblist = get_joblist_from_objects(bake_objects)
+                self.joblist = get_joblist_from_objects(bake_objects)
             else:
-                joblist = get_joblist_manual()
+                self.joblist = get_joblist_manual()
 
-            self.extend_joblist(joblist)
+            self.extend_joblist(self.joblist)
 
+            # Vertext Colors
             if self.settings.use_vertex_color:
-                for obj in bake_objects:
-                    if len(obj.data.vertex_colors) == 0:
-                        self.report(
-                            {'INFO'}, "baking cancelled. '{0}' has no Vertex Color.".format(obj.name))
-                        self.final_cleanup()
-                        return {'CANCELLED'}
-                if "Vertex Color" not in joblist:
-                    joblist.append("Vertex Color")
-            else:
-                self.report(
-                    {'INFO'}, "baking cancelled. '{0}' has no Vertex Color.".format(obj.name))
+                if len(obj.data.vertex_colors) > 0:
+                    vert_colors = []
+                    if self.settings.bake_vertex_colors == 'ALL':
+                        for obj in bake_objects:
+                            for vcol in obj.data.vertex_colors:
+                                vert_colors.append(vcol)
+                    elif self.settings.bake_vertex_colors == 'SELECTED':
+                        for obj in bake_objects:
+                            vert_colors.append(
+                                obj.data.vertex_colors.active)
+                    elif self.settings.bake_vertex_colors == 'ACTIVE_RENDER':
+                        for name, v_col in obj.data.vertex_colors.items():
+                            if v_col.active_render:
+                                vert_colors.append(v_col)
+                                break
+                    else:
+                        index = int(self.settings.bake_vertex_colors) - 1
+                        if index < len(obj.data.vertex_colors):
+                            vert_colors.append(
+                                obj.data.vertex_colors[index])
+                    if vert_colors:
+                        self.joblist["Vertex Color"] = vert_colors
+                else:
+                    self.report(
+                        {'INFO'}, "Vertex Color baking skipped. '{0}' has no Vertex Color".format(obj.name))
 
             # empty joblist -> nothing to do
-            if not joblist:
+            if not self.joblist:
                 self.final_cleanup()
                 self.report({'INFO'}, "Nothing to do.")
                 return {'CANCELLED'}
@@ -1737,7 +1815,7 @@ class PBAKER_OT_bake(bpy.types.Operator):
             active_outputs = get_active_outputs(bake_objects)
             all_material_outputs = get_all_material_outputs(bake_objects)
             # 2.80
-            if not is_2_79:
+            if is_2_80:
                 set_material_outputs_target_to_all(bake_objects)
 
             # Auto UV project
@@ -1746,7 +1824,6 @@ class PBAKER_OT_bake(bpy.types.Operator):
 
             # UV Map selection
             orig_uv_layers_active_index = self.active_object.data.uv_layers.active_index
-            # if not self.settings.select_uv_map == 'SELECTED':
             self.select_uv_map(self.active_object)
 
             # new material
@@ -1758,97 +1835,120 @@ class PBAKER_OT_bake(bpy.types.Operator):
             self.set_texture_folder(self.active_object.name)
 
             # Go through joblist
-            for self.job_name in joblist:
+            for self.job_name, b_list in self.joblist.items():
 
-                # skip, if no overwrite and image exists. load existing image
-                image_file_name = self.get_image_file_name(
-                    self.active_object.name)
-                if not self.settings.use_overwrite and self.is_image_file(image_file_name):
-                    self.report({'INFO'}, "baking skipped for '{0}'. File exists.".format(
-                        self.get_image_file_name(obj.name)))
+                # skip, if job is not "Vertex Color" and has no material
+                if not self.job_name == "Vertex Color":
+                    skip = any(not has_material(obj) for obj in bake_objects)
+                    if skip:
+                        self.report(
+                            {'INFO'}, "{0} baking skipped for '{1}'".format(self.job_name, obj.name))
+                        continue
 
-                    # load image for new material
-                    self.new_images[self.job_name] = self.load_image(
-                        image_file_name)
+                if not b_list:
+                    continue
+                elif b_list == True:
+                    b_list = [None]
 
-                    continue  # skip job
+                for vert_col in b_list:
 
-                # else: do bake
+                    self.suffix_extension = ""
+                    if self.job_name == 'Vertex Color':
+                        self.suffix_extension = vert_col.name
 
-                # set individual samples
-                self.set_samples()
+                    # skip, if no overwrite and image exists. load existing image
+                    image_file_name = self.get_image_file_name(
+                        self.active_object.name)
+                    if not self.settings.use_overwrite and self.is_image_file(image_file_name):
+                        self.report({'INFO'}, "baking skipped for '{0}'. File exists.".format(
+                            self.get_image_file_name(obj.name)))
 
-                # image to bake on
-                image = self.new_bake_image(self.active_object.name)
+                        # load image for new material
+                        self.new_images[self.job_name] = self.load_image(
+                            image_file_name)
 
-                # append image to image dict for new material
-                self.new_images[self.job_name] = image
+                        continue  # skip job
 
-                # temp material for vertex color or wireframe
-                if self.settings.use_vertex_color or self.settings.use_wireframe:
+                    # else: do bake
+
+                    # set individual samples
+                    self.set_samples()
+
+                    # temp material for vertex color or wireframe
+                    if self.settings.use_vertex_color or self.settings.use_wireframe:
+                        for obj in bake_objects:
+                            if not has_material(obj):
+                                add_temp_material(obj)
+
+                    # Prepare materials
+                    if self.job_name == 'Material ID':
+                        self.prepare_objects_for_bake_matid(bake_objects)
+                    elif self.job_name == 'Vertex Color':
+                        self.prepare_objects_for_bake_vertex_color(
+                            obj, vert_col)
+                        # self.suffix_extension = vert_col.name
+                    elif self.job_name == 'Wireframe':
+                        self.prepare_objects_for_bake_wireframe(bake_objects)
+                    elif self.job_name == 'Diffuse':
+                        pass  # prepare nothing
+                    else:
+                        self.prepare_objects_for_bake(bake_objects)
+
+                    # image to bake on
+                    image = self.new_bake_image(self.active_object.name)
+
+                    # append image to image dict for new material
+                    self.new_images[self.job_name +
+                                    self.suffix_extension] = image
+
+                    # image nodes to bake
+                    for mat_slot in self.active_object.material_slots:
+                        if mat_slot.material:
+                            self.create_bake_image_node(
+                                mat_slot.material, image)
+
+                    # Bake and Save image!
+                    self.bake_and_save(image, bake_type=get_bake_type(
+                        self.job_name), selected_to_active=True)
+
+                    # Clean up!
                     for obj in bake_objects:
-                        if not has_material(obj):
-                            add_temp_material(obj)
+                        # delete temp materials
+                        delete_tagged_materials(obj, MATERIAL_TAG_VERTEX)
 
-                # Prepare materials
-                if self.job_name == 'Material ID':
-                    self.prepare_objects_for_bake_matid(bake_objects)
-                elif self.job_name == 'Vertex Color':
-                    self.prepare_objects_for_bake_vertex_color(bake_objects)
-                elif self.job_name == 'Wireframe':
-                    self.prepare_objects_for_bake_wireframe(bake_objects)
-                elif self.job_name == 'Diffuse':
-                    pass  # prepare nothing
-                else:
-                    self.prepare_objects_for_bake(bake_objects)
+                        # delete temp nodes
+                        delete_tagged_nodes_in_object(obj)
 
-                # image nodes to bake
-                for mat_slot in self.active_object.material_slots:
-                    if mat_slot.material:
-                        self.create_bake_image_node(mat_slot.material, image)
+                        # reactivate Material Outputs
+                        disable_material_outputs(obj)
 
-                # Bake and Save image!
-                self.bake_and_save(image, bake_type=get_bake_type(
-                    self.job_name), selected_to_active=True)
-
-                # Clean up!
-                for obj in bake_objects:
                     # delete temp materials
-                    delete_tagged_materials(obj, MATERIAL_TAG_VERTEX)
+                    delete_tagged_materials(
+                        self.active_object, MATERIAL_TAG_VERTEX)
 
                     # delete temp nodes
-                    delete_tagged_nodes_in_object(obj)
+                    delete_tagged_nodes_in_object(self.active_object)
 
                     # reactivate Material Outputs
-                    disable_material_outputs(obj)
+                    disable_material_outputs(self.active_object)
+                    for mat_output in active_outputs:
+                        mat_output.is_active_output = True
 
-                # delete temp materials
-                delete_tagged_materials(
-                    self.active_object, MATERIAL_TAG_VERTEX)
+                    # reselect UV Map
+                    if not self.settings.set_selected_uv_map:
+                        obj = self.active_object
+                        uv_layers = obj.data.uv_textures if is_2_79 else obj.data.uv_layers
+                        uv_layers.active_index = orig_uv_layers_active_index
 
-                # delete temp nodes
-                delete_tagged_nodes_in_object(self.active_object)
+                    # glossiness
+                    self.create_gloss_image(self.active_object.name, image)
 
-                # reactivate Material Outputs
-                disable_material_outputs(self.active_object)
-                for mat_output in active_outputs:
-                    mat_output.is_active_output = True
+                    # add alpha channel to color
+                    self.alpha_channel_to_color()
 
-                # reselect UV Map
-                if not self.settings.set_selected_uv_map:
-                    obj = self.active_object
-                    uv_layers = obj.data.uv_textures if is_2_79 else obj.data.uv_layers
-                    uv_layers.active_index = orig_uv_layers_active_index
-
-                # glossiness
-                self.create_gloss_image(self.active_object.name, image)
-
-                # add alpha channel to color
-                self.alpha_channel_to_color()
-
-                # UPDATE progress report
-                progress += 1/len(joblist)
-                bpy.context.window_manager.progress_update(progress)
+                    # UPDATE progress report
+                    progress += 1/len(self.joblist)
+                    bpy.context.window_manager.progress_update(progress)
 
             # jobs DONE
 

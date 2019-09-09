@@ -124,6 +124,8 @@ class PBAKER_PT_BakeList(PBAKER_PT_SubPanel):
         if self.settings.color_depth == 'INDIVIDUAL':
             row_cd = row.row()
             row_cd.prop(self.settings, "color_depth_vertex_color", expand=True)
+        if self.settings.use_vertex_color:
+            col2.row().prop(self.settings, "bake_vertex_colors")
 
         row = col2.split()
         row.prop(self.settings, "use_material_id")
@@ -414,7 +416,6 @@ class PBAKER_PT_DuplicateObjects(PBAKER_PT_SubPanel):
 
         if self.settings.bake_mode == 'SELECTED_TO_ACTIVE':
             col.active = False
-
 
 
 class PBAKER_PT_Main(Panel):
