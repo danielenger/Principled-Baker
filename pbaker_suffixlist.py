@@ -1,5 +1,5 @@
 import bpy
-from bpy.props import BoolProperty, EnumProperty, IntProperty, StringProperty
+from bpy.props import StringProperty
 from bpy.types import Operator, PropertyGroup, UIList
 
 from .pbaker_functions import *
@@ -15,7 +15,7 @@ if is_2_79:
         ("Roughness", "_roughness"),
 
         ("Normal", "_normal"),
-        #("Bump", "_bump"),
+        # ("Bump", "_bump"),
         ("Displacement", "_disp"),
 
         ("Alpha", "_alpha"),
@@ -126,7 +126,7 @@ class PBAKER_SUFFIXLIST_OT_Delete(Operator):
         return context.scene.principled_baker_suffixlist
 
     def execute(self, context):
-        principled_baker_suffixlist = context.scene.principled_baker_suffixlist.clear()
+        context.scene.principled_baker_suffixlist.clear()
         return{'FINISHED'}
 
 

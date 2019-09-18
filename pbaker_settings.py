@@ -1,7 +1,7 @@
 import bpy
 from bpy.props import (BoolProperty, EnumProperty, FloatProperty, IntProperty,
-                       PointerProperty, StringProperty)
-from bpy.types import AddonPreferences, Operator, Panel, PropertyGroup
+                       StringProperty)
+from bpy.types import PropertyGroup
 
 
 def color_mode_items(scene, context):
@@ -53,7 +53,7 @@ def reset_bake_list(context, value):
     bpy.ops.principled_baker_bakelist.update()
 
 
-class PBAKER_settings(bpy.types.PropertyGroup):
+class PBAKER_settings(PropertyGroup):
 
     file_format: EnumProperty(
         name="File Format",
@@ -136,7 +136,7 @@ class PBAKER_settings(bpy.types.PropertyGroup):
         name="Resolution",
         default=1024,
         min=1,
-        soft_max=8*1024
+        soft_max=8 * 1024
     )
     resolution: EnumProperty(
         name="Resolution",

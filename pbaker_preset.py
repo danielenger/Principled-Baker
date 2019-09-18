@@ -1,4 +1,4 @@
-import bpy
+# import bpy
 from bl_operators.presets import AddPresetBase
 from bpy.types import Menu, Operator
 

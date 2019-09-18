@@ -1,9 +1,8 @@
 import bpy
-from bpy.props import BoolProperty, EnumProperty, IntProperty, StringProperty
+from bpy.props import BoolProperty, EnumProperty, IntProperty
 from bpy.types import Operator, PropertyGroup, UIList
 
 from .pbaker_functions import *
-
 
 DEFAULT_SAMPLES = 128
 
@@ -153,7 +152,7 @@ class PBAKER_BAKELIST_OT_Delete(Operator):
         return context.scene.principled_baker_bakelist
 
     def execute(self, context):
-        principled_baker_bakelist = context.scene.principled_baker_bakelist.clear()
+        context.scene.principled_baker_bakelist.clear()
         return{'FINISHED'}
 
 

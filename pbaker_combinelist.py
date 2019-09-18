@@ -1,5 +1,5 @@
 import bpy
-from bpy.props import BoolProperty, EnumProperty, IntProperty, StringProperty
+from bpy.props import BoolProperty, EnumProperty, StringProperty
 from bpy.types import Operator, PropertyGroup, UIList
 
 from .pbaker_functions import *
@@ -107,7 +107,7 @@ class PBAKER_COMBINELIST_OT_Add(Operator):
 
     def execute(self, context):
         combinelist = bpy.context.scene.principled_baker_combinelist
-        index = bpy.context.scene.principled_baker_combinelist_index
+        # index = bpy.context.scene.principled_baker_combinelist_index
 
         item = combinelist.add()
         item.name = "Combine"

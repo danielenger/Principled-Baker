@@ -560,9 +560,9 @@ def has_material(obj):
     if len(obj.material_slots) >= 1:
         for mat_slot in obj.material_slots:
             if mat_slot.material:
-                if not MATERIAL_TAG in mat_slot.material.keys():
+                if MATERIAL_TAG not in mat_slot.material.keys():
                     material_output = get_active_output(mat_slot.material)
-                    if material_output == None:
+                    if material_output is None:
                         return False
                     else:
                         if not material_output.inputs['Surface'].is_linked:
@@ -583,22 +583,22 @@ def get_bake_type(job_name):
 
 
 def get_only_meshes(objects):
-    l = []
+    list = []
     for o in objects:
         if o.type == 'MESH':
-            l.append(o)
-    return l
+            list.append(o)
+    return list
 
 
 def get_active_outputs(objects):
-    if not type(objects) == type(list()):
+    if not isinstance(objects, list):
         objects = [objects]
 
     active_outputs = []
     for obj in objects:
         for mat_slot in obj.material_slots:
             if mat_slot.material:
-                if not MATERIAL_TAG in mat_slot.material.keys():
+                if MATERIAL_TAG not in mat_slot.material.keys():
                     node = get_active_output(mat_slot.material)
                     if node:
                         active_outputs.append(node)
@@ -606,7 +606,7 @@ def get_active_outputs(objects):
 
 
 def get_all_material_outputs(objects):
-    if not type(objects) == type(list()):
+    if not isinstance(objects, list):
         objects = [objects]
 
     outputs = {}
@@ -625,7 +625,7 @@ def get_all_material_outputs(objects):
 
 
 def set_material_outputs_target_to_all(objects):
-    if not type(objects) == type(list()):
+    if not isinstance(objects, list):
         objects = [objects]
 
     for obj in objects:
@@ -666,8 +666,7 @@ def prepare_material_for_bake(material, do_ungroup_values=True):
     # move temp nodes in location and put in frame
     for node in mat.node_tree.nodes:
         if NODE_TAG in node.keys():
-            node.location.x += abs(loc_most_left -
-                                   loc_most_right) + 500
+            node.location.x += abs(loc_most_left - loc_most_right) + 500
     p_baker_frame = mat.node_tree.nodes.new(type="NodeFrame")
     for node in mat.node_tree.nodes:
         if NODE_TAG in node.keys():
@@ -723,7 +722,7 @@ def get_joblist_from_object(obj):
     for mat_slot in obj.material_slots:
         if mat_slot.material:
             mat = mat_slot.material
-            if not MATERIAL_TAG in mat_slot.material.keys():
+            if MATERIAL_TAG not in mat_slot.material.keys():
                 material_output = None
                 for node in mat.node_tree.nodes:
                     if node.type == "OUTPUT_MATERIAL" and NODE_TAG in node.keys():
@@ -754,18 +753,13 @@ def get_joblist_from_object(obj):
 
                     # Displacement
                     socket_name = 'Displacement'
-                    for node in mat.node_tree.nodes:
-                        if NODE_TAG in node.keys():
-                            if node.type == 'DISPLACEMENT':
-                                if node.inputs['Height'].is_linked:
-                                    if are_nodes_connected(node, material_output):
-                                        # if not socket_name in joblist:
-                                        joblist[socket_name] = True
+                    if material_output.inputs[socket_name].is_linked:
+                        joblist[socket_name] = True
 
                     # Bump
                     socket_name = 'Bump'
                     if settings.use_Bump and is_node_type_in_node_tree(mat, material_output, 'BUMP'):
-                        if not socket_name in joblist:
+                        if socket_name not in joblist:
                             joblist[socket_name] = True
 
                     # BSDF nodes
@@ -870,23 +864,7 @@ def get_joblist_manual():
 def check_permission(path):
     if not path.endswith("\\"):
         path += "\\"
-
-    tmp_file = os.path.normpath(
-        path + "PBAKER_TEMP_FILE_{}".format(time.time()))
-    try:
-        with open(tmp_file, 'w') as f:
-            pass
-    except PermissionError as e:
-        print("Error: {} {} ".format(e.filename, e.strerror))
-        return False
-
-    try:
-        os.remove(tmp_file)
-    except OSError as e:
-        print("Error: {} {} ".format(e.filename, e.strerror))
-        return False
-
-    return True
+    return os.access(path, os.W_OK)
 
 
 def get_all_nodes_linked_from(node):
@@ -923,7 +901,7 @@ def duplicate_node(mat, node):
         try:
             a = getattr(node, attr)
             setattr(new_node, attr, a)
-        except AttributeError as e:
+        except AttributeError:
             pass
 
     # Color Ramp
@@ -932,14 +910,14 @@ def duplicate_node(mat, node):
             try:
                 a = getattr(node.color_ramp, attr)
                 setattr(new_node.color_ramp, attr, a)
-            except AttributeError as e:
+            except AttributeError:
                 pass
 
         for i, col_ramp_elem in enumerate(node.color_ramp.elements):
             try:
                 new_node.color_ramp.elements[i].color = col_ramp_elem.color
                 new_node.color_ramp.elements[i].position = col_ramp_elem.position
-            except IndexError as e:
+            except IndexError:
                 pos = col_ramp_elem.position
                 new_elem = new_node.color_ramp.elements.new(pos)
                 new_elem.color = col_ramp_elem.color
@@ -950,7 +928,7 @@ def duplicate_node(mat, node):
             try:
                 a = getattr(node.mapping, attr)
                 setattr(new_node.mapping, attr, a)
-            except AttributeError as e:
+            except AttributeError:
                 pass
 
         # copy every point in every curve
@@ -959,7 +937,7 @@ def duplicate_node(mat, node):
                 try:
                     new_node.mapping.curves[i].points[j].location = point.location
                     new_node.mapping.curves[i].points[j].handle_type = point.handle_type
-                except IndexError as e:
+                except IndexError:
                     pos = point.location[0]
                     val = point.location[1]
                     new_node.mapping.curves[i].points.new(pos, val)
@@ -1179,13 +1157,13 @@ def get_value_list_from_bsdf_nodes_in_material(material, node, value_name):
         if n.type in BSDF_NODES:
             if are_nodes_connected(n, node):
                 val = get_value_from_node_by_name(n, value_name)
-                if not val == None:
+                if val is not None:
                     value_list.append(val)
     return value_list
 
 
 def get_value_list(node, value_name):
-    """Return a list of all values by value name in a node tree starting from node.        
+    """Return a list of all values by value name in a node tree starting from node.
     Values from Normal Map are exclued."""
 
     value_list = []
@@ -1193,7 +1171,7 @@ def get_value_list(node, value_name):
     def find_values(node, value_name):
         if not node.type == 'NORMAL_MAP':
             val = get_value_from_node_by_name(node, value_name)
-            if not val == None:
+            if val is not None:
                 value_list.append(val)
 
             for socket in node.inputs:
@@ -1206,7 +1184,7 @@ def get_value_list(node, value_name):
 
 
 def get_value_list_from_node_types(node, value_name, node_types):
-    """Return a list of all values by value name with node types in a node tree starting from node.        
+    """Return a list of all values by value name with node types in a node tree starting from node.
     Values from Normal Map are exclued."""
 
     value_list = []
@@ -1219,7 +1197,7 @@ def get_value_list_from_node_types(node, value_name, node_types):
 
         if node.type in node_types and tmp_value_name in node.inputs.keys():
             val = get_value_from_node_by_name(node.inputs[tmp_value_name])
-            if not val == None:
+            if val is not None:
                 value_list.append(val)
 
         for socket in node.inputs:

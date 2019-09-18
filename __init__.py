@@ -18,7 +18,7 @@ bl_info = {
     "name": "Principled Baker",
     "description": "bakes all inputs of Principled BSDF to image textures",
     "author": "Daniel Engler",
-    "version": (0, 5, 0),
+    "version": (0, 5, 1),
     "blender": (2, 80, 0),
     "location": "Shader Editor Toolbar",
     "category": "Node",
@@ -35,9 +35,9 @@ from .pbaker_preset import *
 from .pbaker_settings import PBAKER_settings
 
 if bpy.app.version_string.startswith('2.8'):
-   from .pbaker_panel import *
+    from .pbaker_panel import *
 
-   classes = (
+    classes = (
       PBAKER_OT_bake,
       PBAKER_prefs,
       PBAKER_settings,
@@ -81,12 +81,12 @@ if bpy.app.version_string.startswith('2.8'):
       PBAKER_PT_Misc,
       PBAKER_PT_CombineChannels,
       PBAKER_PT_DuplicateObjects,
-   )
+    )
 # 2.79
 else:
-   from .pbaker_panel_279 import PBAKER_PT_panel
+    from .pbaker_panel_279 import PBAKER_PT_panel
 
-   classes = (
+    classes = (
       PBAKER_OT_bake,
       PBAKER_PT_panel,
       PBAKER_prefs,
@@ -107,33 +107,33 @@ else:
       PBAKER_SUFFIXLIST_OT_Reset,
       PBAKER_AddPresetObjectDisplay,
       PBAKER_MT_display_presets,
-   )
+    )
 
 
 def register():
-   for cls in classes:
-      bpy.utils.register_class(cls)
+    for cls in classes:
+        bpy.utils.register_class(cls)
 
-   bpy.types.Scene.principled_baker_settings = bpy.props.PointerProperty(type=PBAKER_settings)
-   bpy.types.Scene.principled_baker_bakelist = bpy.props.CollectionProperty(type = PBAKER_ListItem)
-   bpy.types.Scene.principled_baker_bakelist_index = bpy.props.IntProperty(name="Bakelist Index", default = 0)
+    bpy.types.Scene.principled_baker_settings = bpy.props.PointerProperty(type=PBAKER_settings)
+    bpy.types.Scene.principled_baker_bakelist = bpy.props.CollectionProperty(type=PBAKER_ListItem)
+    bpy.types.Scene.principled_baker_bakelist_index = bpy.props.IntProperty(name="Bakelist Index", default=0)
 
-   bpy.types.Scene.principled_baker_suffixlist = bpy.props.CollectionProperty(type = PBAKER_SuffixListItem)
-   bpy.types.Scene.principled_baker_suffixlist_index = bpy.props.IntProperty(name="Suffixlist Index", default = 0)
+    bpy.types.Scene.principled_baker_suffixlist = bpy.props.CollectionProperty(type=PBAKER_SuffixListItem)
+    bpy.types.Scene.principled_baker_suffixlist_index = bpy.props.IntProperty(name="Suffixlist Index", default=0)
 
-   bpy.types.Scene.principled_baker_combinelist = bpy.props.CollectionProperty(type = PBAKER_CombineListItem)
-   bpy.types.Scene.principled_baker_combinelist_index = bpy.props.IntProperty(name="Combinelist Index", default = 0)
-   
-   
+    bpy.types.Scene.principled_baker_combinelist = bpy.props.CollectionProperty(type=PBAKER_CombineListItem)
+    bpy.types.Scene.principled_baker_combinelist_index = bpy.props.IntProperty(name="Combinelist Index", default=0)
+
+
 def unregister():
-   for cls in reversed(classes):
-      bpy.utils.unregister_class(cls)
-   
-   del bpy.types.Scene.principled_baker_settings
-   del bpy.types.Scene.principled_baker_bakelist_index
-   del bpy.types.Scene.principled_baker_suffixlist_index
-   del bpy.types.Scene.principled_baker_combinelist_index
+    for cls in reversed(classes):
+        bpy.utils.unregister_class(cls)
+
+    del bpy.types.Scene.principled_baker_settings
+    del bpy.types.Scene.principled_baker_bakelist_index
+    del bpy.types.Scene.principled_baker_suffixlist_index
+    del bpy.types.Scene.principled_baker_combinelist_index
 
 
 if __name__ == "__main__":
-   register()
+    register()
