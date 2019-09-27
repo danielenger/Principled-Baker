@@ -639,11 +639,12 @@ def set_material_outputs_target_to_all(objects):
 def prepare_material_for_bake(material, do_ungroup_values=True):
     mat = material
 
-    location_list = []
-    for node in mat.node_tree.nodes:
-        location_list.append(node.location.x)
-    loc_most_left = min(location_list)
-    loc_most_right = max(location_list)
+    # TODO location too far off on large node trees
+    # location_list = []
+    # for node in mat.node_tree.nodes:
+    #     location_list.append(node.location.x)
+    # loc_most_left = min(location_list)
+    # loc_most_right = max(location_list)
 
     # Duplicate node tree from active output
     active_output = get_active_output(mat)
@@ -664,9 +665,10 @@ def prepare_material_for_bake(material, do_ungroup_values=True):
         node[NODE_TAG] = 1
 
     # move temp nodes in location and put in frame
-    for node in mat.node_tree.nodes:
-        if NODE_TAG in node.keys():
-            node.location.x += abs(loc_most_left - loc_most_right) + 500
+    # TODO
+    # for node in mat.node_tree.nodes:
+    #     if NODE_TAG in node.keys():
+    #         node.location.x += abs(loc_most_left - loc_most_right) + 500
     p_baker_frame = mat.node_tree.nodes.new(type="NodeFrame")
     for node in mat.node_tree.nodes:
         if NODE_TAG in node.keys():
@@ -685,7 +687,7 @@ def prepare_material_for_bake(material, do_ungroup_values=True):
     return new_output
 
 
-def get_joblist_from_object(obj):
+def get_joblist_from_object(obj, by_value_differ=True, by_connected_inputs=True):
     joblist = dict()
     settings = bpy.context.scene.principled_baker_settings
 
@@ -695,85 +697,87 @@ def get_joblist_from_object(obj):
             prepare_material_for_bake(mat, do_ungroup_values=False)
 
     # add to joblist if values differ
-    if settings.bake_mode == 'BATCH':
-        value_list = []
+    if by_value_differ:
+        if settings.bake_mode == 'BATCH':
+            value_list = []
 
-        for value_name in NODE_INPUTS:
-            value_list.clear()
-            if value_name not in joblist and value_name not in ['Subsurface Radius', 'Normal', 'Clearcoat Normal', 'Tangent']:
+            for value_name in NODE_INPUTS:
+                value_list.clear()
+                if value_name not in joblist and value_name not in ['Subsurface Radius', 'Normal', 'Clearcoat Normal', 'Tangent']:
 
-                for mat_slot in obj.material_slots:
-                    if mat_slot.material:
-                        mat = mat_slot.material
+                    for mat_slot in obj.material_slots:
+                        if mat_slot.material:
+                            mat = mat_slot.material
 
-                        material_output = None
-                        for node in mat.node_tree.nodes:
-                            if node.type == "OUTPUT_MATERIAL" and NODE_TAG in node.keys():
-                                material_output = node
+                            material_output = None
+                            for node in mat.node_tree.nodes:
+                                if node.type == "OUTPUT_MATERIAL" and NODE_TAG in node.keys():
+                                    material_output = node
 
-                        if material_output:
-                            value_list.extend(get_value_list_from_bsdf_nodes_in_material(
-                                mat, material_output, value_name))
-                if value_list:
-                    if not is_list_equal(value_list):
-                        joblist[value_name] = True
+                            if material_output:
+                                value_list.extend(get_value_list_from_bsdf_nodes_in_material(
+                                    mat, material_output, value_name))
+                    if value_list:
+                        if not is_list_equal(value_list):
+                            joblist[value_name] = True
 
     # search material for jobs by connected node types
-    for mat_slot in obj.material_slots:
-        if mat_slot.material:
-            mat = mat_slot.material
-            if MATERIAL_TAG not in mat_slot.material.keys():
-                material_output = None
-                for node in mat.node_tree.nodes:
-                    if node.type == "OUTPUT_MATERIAL" and NODE_TAG in node.keys():
-                        material_output = node
-                if material_output:
-                    # add special cases:
-                    # Alpha node: Transparent
-                    if is_node_type_in_node_tree(mat, material_output, 'BSDF_TRANSPARENT'):
-                        # if not 'Alpha' in joblist:
-                        joblist['Alpha'] = True
+    if by_connected_inputs:
+        for mat_slot in obj.material_slots:
+            if mat_slot.material:
+                mat = mat_slot.material
+                if MATERIAL_TAG not in mat_slot.material.keys():
+                    material_output = None
+                    for node in mat.node_tree.nodes:
+                        if node.type == "OUTPUT_MATERIAL" and NODE_TAG in node.keys():
+                            material_output = node
+                    if material_output:
+                        # add special cases:
+                        # Alpha node: Transparent
+                        if is_node_type_in_node_tree(mat, material_output, 'BSDF_TRANSPARENT'):
+                            # if not 'Alpha' in joblist:
+                            joblist['Alpha'] = True
 
-                    # Alpha for nodes: Translucent, Glass
-                    for alpha_name, n_type in ALPHA_NODES.items():
-                        if is_node_type_in_node_tree(mat, material_output, n_type):
-                            # if not alpha_name in joblist:
-                            joblist[alpha_name] = True
+                        # Alpha for nodes: Translucent, Glass
+                        for alpha_name, n_type in ALPHA_NODES.items():
+                            if is_node_type_in_node_tree(mat, material_output, n_type):
+                                # if not alpha_name in joblist:
+                                joblist[alpha_name] = True
 
-                    # Emission
-                    if is_node_type_in_node_tree(mat, material_output, 'EMISSION'):
-                        # if not 'Emission' in joblist:
-                        joblist['Emission'] = True
+                        # Emission
+                        if is_node_type_in_node_tree(mat, material_output, 'EMISSION'):
+                            # if not 'Emission' in joblist:
+                            joblist['Emission'] = True
 
-                    # AO - 2.80 only
-                    if is_2_80:
-                        if is_node_type_in_node_tree(mat, material_output, 'AMBIENT_OCCLUSION'):
-                            # if not 'Ambient Occlusion' in joblist:
-                            joblist['Ambient Occlusion'] = True
+                        # AO - 2.80 only
+                        if is_2_80:
+                            if is_node_type_in_node_tree(mat, material_output, 'AMBIENT_OCCLUSION'):
+                                # if not 'Ambient Occlusion' in joblist:
+                                joblist['Ambient Occlusion'] = True
 
-                    # Displacement
-                    socket_name = 'Displacement'
-                    if material_output.inputs[socket_name].is_linked:
-                        joblist[socket_name] = True
-
-                    # Bump
-                    socket_name = 'Bump'
-                    if settings.use_Bump and is_node_type_in_node_tree(mat, material_output, 'BUMP'):
-                        if socket_name not in joblist:
+                        # Displacement
+                        socket_name = 'Displacement'
+                        if material_output.inputs[socket_name].is_linked:
                             joblist[socket_name] = True
 
-                    # BSDF nodes
-                    for node in mat.node_tree.nodes:
-                        if NODE_TAG in node.keys():
-                            if node.type in BSDF_NODES:
-                                for socket in node.inputs:
-                                    socket_name = socket.name
-                                    if socket_name in NODE_INPUTS + ['Base Color']:
-                                        if socket.is_linked:
-                                            if are_nodes_connected(node, material_output):
-                                                socket_name = 'Color' if socket_name == 'Base Color' else socket_name
-                                                # if not socket_name in joblist:
-                                                joblist[socket_name] = True
+                        # Bump
+                        socket_name = 'Bump'
+                        if settings.use_Bump and is_node_type_in_node_tree(mat, material_output, 'BUMP'):
+                            if socket_name not in joblist:
+                                joblist[socket_name] = True
+
+                        # BSDF nodes
+                        for node in mat.node_tree.nodes:
+                            if NODE_TAG in node.keys():
+                                if node.type in BSDF_NODES:
+                                    for socket in node.inputs:
+                                        socket_name = socket.name
+                                        if socket_name in NODE_INPUTS + ['Base Color']:
+                                            if socket.is_linked:
+                                                if are_nodes_connected(node, material_output):
+                                                    socket_name = 'Color' if socket_name == 'Base Color' else socket_name
+                                                    # if not socket_name in joblist:
+                                                    joblist[socket_name] = True
 
     # force bake of Color, if user wants alpha in color
     if settings.use_alpha_to_color and settings.color_mode == 'RGBA':
@@ -788,7 +792,7 @@ def get_joblist_from_object(obj):
     return joblist
 
 
-def get_joblist_from_objects(objs):
+def get_joblist_from_objects(objs, by_value_differ=True, by_connected_inputs=True):
     joblist = dict()
     settings = bpy.context.scene.principled_baker_settings
 
@@ -802,41 +806,43 @@ def get_joblist_from_objects(objs):
                 return ["Normal"]
 
     # add to joblist if values differ
-    if not settings.bake_mode == 'BATCH':
-        for obj in objs:
-            for mat_slot in obj.material_slots:
-                if mat_slot.material:
-                    mat = mat_slot.material
-                    prepare_material_for_bake(mat, do_ungroup_values=False)
+    if by_value_differ:
+        if not settings.bake_mode == 'BATCH':
+            for obj in objs:
+                for mat_slot in obj.material_slots:
+                    if mat_slot.material:
+                        mat = mat_slot.material
+                        prepare_material_for_bake(mat, do_ungroup_values=False)
 
-        value_list = []
-        for value_name in NODE_INPUTS:
-            value_list.clear()
-            if value_name not in joblist and value_name not in ['Subsurface Radius', 'Normal', 'Clearcoat Normal', 'Tangent']:
-                for obj in objs:
-                    for mat_slot in obj.material_slots:
-                        if mat_slot.material:
-                            mat = mat_slot.material
+            value_list = []
+            for value_name in NODE_INPUTS:
+                value_list.clear()
+                if value_name not in joblist and value_name not in ['Subsurface Radius', 'Normal', 'Clearcoat Normal', 'Tangent']:
+                    for obj in objs:
+                        for mat_slot in obj.material_slots:
+                            if mat_slot.material:
+                                mat = mat_slot.material
 
-                        material_output = None
-                        for node in mat.node_tree.nodes:
-                            if node.type == "OUTPUT_MATERIAL" and NODE_TAG in node.keys():
-                                material_output = node
+                            material_output = None
+                            for node in mat.node_tree.nodes:
+                                if node.type == "OUTPUT_MATERIAL" and NODE_TAG in node.keys():
+                                    material_output = node
 
-                        if material_output:
-                            value_list.extend(get_value_list_from_bsdf_nodes_in_material(
-                                mat, material_output, value_name))
-                if value_list:
-                    if not is_list_equal(value_list):
-                        joblist[value_name] = True
+                            if material_output:
+                                value_list.extend(get_value_list_from_bsdf_nodes_in_material(
+                                    mat, material_output, value_name))
+                    if value_list:
+                        if not is_list_equal(value_list):
+                            joblist[value_name] = True
 
-        # Clean up! - delete temp nodes
-        for mat_slot in obj.material_slots:
-            if mat_slot.material:
-                delete_tagged_nodes(mat_slot.material, NODE_TAG)
+            # Clean up! - delete temp nodes
+            for obj in objs:
+                for mat_slot in obj.material_slots:
+                    if mat_slot.material:
+                        delete_tagged_nodes(mat_slot.material, NODE_TAG)
 
     for obj in objs:
-        for job in get_joblist_from_object(obj):
+        for job in get_joblist_from_object(obj, by_value_differ=by_value_differ, by_connected_inputs=by_connected_inputs):
             # if job not in joblist:
             joblist[job] = True
     return joblist

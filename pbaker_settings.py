@@ -594,3 +594,15 @@ class PBAKER_settings(PropertyGroup):
     duplicate_object_loc_offset_x: FloatProperty(name="offset x", default=0.0,)
     duplicate_object_loc_offset_y: FloatProperty(name="offset y", default=0.0,)
     duplicate_object_loc_offset_z: FloatProperty(name="offset z", default=0.0,)
+
+    use_value_differ: BoolProperty(
+        name="Value Differences",
+        description='',
+        default=True
+    )
+
+    use_connected_inputs: BoolProperty(
+        name="Connected Inputs",
+        description='',
+        default=True
+    )

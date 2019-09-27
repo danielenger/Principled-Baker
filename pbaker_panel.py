@@ -78,6 +78,11 @@ class PBAKER_PT_BakeList(PBAKER_PT_SubPanel):
             col_bakelist.active = False
 
         col.separator()
+        col.label(text="Detection Options:")
+        col.prop(self.settings, "use_value_differ")
+        col.prop(self.settings, "use_connected_inputs")
+
+        col.separator()
         col.label(text="Additional Bake Types:")
 
         # Glossiness

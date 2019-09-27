@@ -185,6 +185,9 @@ class PBAKER_BAKELIST_OT_Detect(Operator):
     bl_label = "Update Bakelist"
 
     def execute(self, context):
+
+        settings = bpy.context.scene.principled_baker_settings
+
         if not context.scene.principled_baker_bakelist:
             bpy.ops.principled_baker_bakelist.init()
         # else:
@@ -192,7 +195,10 @@ class PBAKER_BAKELIST_OT_Detect(Operator):
 
         bakelist = context.scene.principled_baker_bakelist
 
-        temp_joblist = get_joblist_from_objects(context.selected_objects)
+        # temp_joblist = get_joblist_from_objects(context.selected_objects)
+        temp_joblist = get_joblist_from_objects(context.selected_objects,
+                                                by_value_differ=settings.use_value_differ,
+                                                by_connected_inputs=settings.use_connected_inputs)
 
         for item_name, item in bakelist.items():
             if item_name in temp_joblist:

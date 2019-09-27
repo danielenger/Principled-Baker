@@ -950,27 +950,28 @@ class PBAKER_OT_bake(bpy.types.Operator):
                 {'ERROR'}, "'{}' not a valid path or no permission".format(path))
             return False
 
-        cwd = os.path.dirname(bpy.data.filepath)
-        if path == "//":
-            abs_path = os.path.normpath(cwd)
-        else:
-            if path.startswith("//"):
-                path = path[2:]
-            if os.path.isabs(path):
-                abs_path = bpy.path.abspath(path)
-            else:
-                abs_path = bpy.path.abspath(cwd + os.path.sep + path)
+        # TODO
+        # cwd = os.path.dirname(bpy.data.filepath)
+        # if path == "//":
+        #     abs_path = os.path.normpath(cwd)
+        # else:
+        #     if path.startswith("//"):
+        #         path = path[2:]
+        #     if os.path.isabs(path):
+        #         abs_path = bpy.path.abspath(path)
+        #     else:
+        #         abs_path = bpy.path.abspath(cwd + os.path.sep + path)
 
-        os_abs_path = os.path.abspath(abs_path)
+        # os_abs_path = os.path.abspath(abs_path)
 
-        if not os.path.exists(os_abs_path):
-            try:
-                os.makedirs(os_abs_path)
-            except OSError:  # TODO error handling
-                return False
+        # if not os.path.exists(os_abs_path):
+        #     try:
+        #         os.makedirs(os_abs_path)
+        #     except OSError:  # TODO error handling
+        #         return False
 
-        if check_permission(os_abs_path):
-            return True
+        # if check_permission(os_abs_path):
+        #     return True
 
     def set_texture_folder(self, obj_name):
         if not self.settings.use_texture_folder:
@@ -1183,7 +1184,8 @@ class PBAKER_OT_bake(bpy.types.Operator):
         # Check file path
         check = self.check_file_path()
         if not check:
-            self.report({'ERROR'}, "'{}' Permission denied".format(self.settings.file_path))
+            # TODO
+            # self.report({'ERROR'}, "'{}' Permission denied".format(self.settings.file_path))
             return {'CANCELLED'}
 
         # 2.79
@@ -1320,7 +1322,9 @@ class PBAKER_OT_bake(bpy.types.Operator):
                 self.joblist.clear()
 
                 if self.settings.use_autodetect:
-                    self.joblist = get_joblist_from_object(obj)
+                    self.joblist = get_joblist_from_object(obj,
+                                                           by_value_differ=self.settings.use_value_differ,
+                                                           by_connected_inputs=self.settings.use_connected_inputs)
                 else:
                     self.joblist = get_joblist_manual()
 
@@ -1537,7 +1541,9 @@ class PBAKER_OT_bake(bpy.types.Operator):
             # Populate joblist
             self.joblist.clear()
             if self.settings.use_autodetect:
-                self.joblist = get_joblist_from_objects(bake_objects)
+                self.joblist = get_joblist_from_objects(bake_objects,
+                                                        by_value_differ=self.settings.use_value_differ,
+                                                        by_connected_inputs=self.settings.use_connected_inputs)
             else:
                 self.joblist = get_joblist_manual()
 
@@ -1765,11 +1771,12 @@ class PBAKER_OT_bake(bpy.types.Operator):
                     return {'CANCELLED'}
 
             # Populate joblist
-            # joblist = []
             self.joblist.clear()
 
             if self.settings.use_autodetect:
-                self.joblist = get_joblist_from_objects(bake_objects)
+                self.joblist = get_joblist_from_objects(bake_objects,
+                                                        by_value_differ=self.settings.use_value_differ,
+                                                        by_connected_inputs=self.settings.use_connected_inputs)
             else:
                 self.joblist = get_joblist_manual()
 
