@@ -306,7 +306,7 @@ class PBAKER_OT_bake(bpy.types.Operator):
                 # 2.80
                 # if is_2_80:
                 if name == "Alpha":
-                    if self.settings.use_alpha_to_color:
+                    if self.settings.use_alpha_to_color and "Color" in image_nodes:
                         color_image_node = image_nodes['Color']
                         if is_2_80:
                             new_mat.node_tree.links.new(color_image_node.outputs['Alpha'],
@@ -524,12 +524,11 @@ class PBAKER_OT_bake(bpy.types.Operator):
 
         return image
 
-    def create_gloss_image(self, obj_name, img):
-        if self.job_name == "Roughness" and self.settings.use_invert_roughness:
-            self.job_name = "Glossiness"
+    def create_gloss_image(self, obj_name):
+        if "Roughness" in self.new_images:
+            img = self.new_images["Roughness"]
             img_name = self.get_image_file_name(obj_name)
-            if img_name in bpy.data.images:
-                bpy.data.images.remove(bpy.data.images[img_name])
+            self.job_name = "Glossiness"  # for suffix
             gloss_image = self.new_bake_image(obj_name)
             gloss_image.filepath = self.get_image_file_path(img_name)
             gloss_image.pixels = get_invert_image(img)
@@ -538,7 +537,7 @@ class PBAKER_OT_bake(bpy.types.Operator):
             self.save_image(gloss_image)
             if is_2_80:
                 gloss_image.reload()
-            self.new_images["Glossiness"] = gloss_image
+            self.new_images[self.job_name] = gloss_image
 
     def can_bake(self, objects):
         if not isinstance(objects, list):
@@ -744,7 +743,7 @@ class PBAKER_OT_bake(bpy.types.Operator):
                         mat, socket_to_surface, socket_to_pb_emission_node_color, 'BSDF_TRANSPARENT', 'Fac')
                 # 2.80
                 else:
-                    if is_node_type_in_node_tree(material_output, 'BSDF_TRANSPARENT'):
+                    if is_node_type_in_node_tree(mat, material_output, 'BSDF_TRANSPARENT'):
                         prepare_bake_factor(
                             mat, socket_to_surface, socket_to_pb_emission_node_color, 'BSDF_TRANSPARENT', 'Fac')
                     else:
@@ -947,9 +946,9 @@ class PBAKER_OT_bake(bpy.types.Operator):
 
         if path in ['', ' ', '/', '///', '\\', '//\\']:
             self.report(
-                {'ERROR'}, "'{}' not a valid path or no permission".format(path))
+                {'ERROR'}, f"'{path}' not a valid path")
             return False
-        
+
         return True
 
         # TODO
@@ -1002,11 +1001,10 @@ class PBAKER_OT_bake(bpy.types.Operator):
                 return False
 
     def alpha_channel_to_color(self):
-        if self.settings.use_alpha_to_color:
-            if "Color" in self.new_images.keys() and "Alpha" in self.new_images.keys():
-                self.new_images["Color"].pixels = get_combined_images(
-                    self.new_images["Color"], self.new_images["Alpha"], 0, 3)
-                self.new_images["Color"].save()
+        if "Color" in self.new_images.keys() and "Alpha" in self.new_images.keys():
+            img = get_combined_images(self.new_images["Color"], self.new_images["Alpha"], 0, 3)
+            self.new_images["Color"].pixels = img
+            self.new_images["Color"].save()
 
     def combine_channels(self, obj):
         for combi in bpy.context.scene.principled_baker_combinelist:
@@ -1487,13 +1485,15 @@ class PBAKER_OT_bake(bpy.types.Operator):
                             uv_layers = obj.data.uv_textures if is_2_79 else obj.data.uv_layers
                             uv_layers.active_index = orig_uv_layers_active_index
 
-                        # glossiness
-                        self.create_gloss_image(obj.name, image)
-
-                        # add alpha channel to color
-                        self.alpha_channel_to_color()
-
                 # jobs DONE
+
+                # Glossiness
+                if self.settings.use_invert_roughness:
+                    self.create_gloss_image(obj.name)
+
+                # Add alpha channel to color
+                if self.settings.use_alpha_to_color:
+                    self.alpha_channel_to_color()
 
                 # Duplicate object
                 if self.settings.duplicate_objects:
@@ -1707,17 +1707,19 @@ class PBAKER_OT_bake(bpy.types.Operator):
                     for mat_output in active_outputs:
                         mat_output.is_active_output = True
 
-                    # glossiness
-                    self.create_gloss_image(obj.name, image)
-
-                    # add alpha channel to color
-                    self.alpha_channel_to_color()
-
                     # UPDATE progress report
                     progress += 1 / len(self.joblist)
                     bpy.context.window_manager.progress_update(progress)
 
             # jobs DONE
+
+            # Glossiness
+            if self.settings.use_invert_roughness:
+                self.create_gloss_image(obj.name)
+
+            # Add alpha channel to color
+            if self.settings.use_alpha_to_color:
+                self.alpha_channel_to_color()
 
             # Duplicate objects
             if self.settings.duplicate_objects:
@@ -1950,17 +1952,19 @@ class PBAKER_OT_bake(bpy.types.Operator):
                         uv_layers = obj.data.uv_textures if is_2_79 else obj.data.uv_layers
                         uv_layers.active_index = orig_uv_layers_active_index
 
-                    # glossiness
-                    self.create_gloss_image(self.active_object.name, image)
-
-                    # add alpha channel to color
-                    self.alpha_channel_to_color()
-
                     # UPDATE progress report
                     progress += 1 / len(self.joblist)
                     bpy.context.window_manager.progress_update(progress)
 
             # jobs DONE
+
+            # Glossiness
+            if self.settings.use_invert_roughness:
+                self.create_gloss_image(obj.name)
+
+            # Add alpha channel to color
+            if self.settings.use_alpha_to_color:
+                self.alpha_channel_to_color()
 
             # add new images to new material
             self.add_images_to_material(new_mat)
