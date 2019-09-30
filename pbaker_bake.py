@@ -949,6 +949,8 @@ class PBAKER_OT_bake(bpy.types.Operator):
             self.report(
                 {'ERROR'}, "'{}' not a valid path or no permission".format(path))
             return False
+        
+        return True
 
         # TODO
         # cwd = os.path.dirname(bpy.data.filepath)
