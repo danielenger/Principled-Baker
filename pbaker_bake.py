@@ -527,8 +527,8 @@ class PBAKER_OT_bake(bpy.types.Operator):
     def create_gloss_image(self, obj_name):
         if "Roughness" in self.new_images:
             img = self.new_images["Roughness"]
-            img_name = self.get_image_file_name(obj_name)
             self.job_name = "Glossiness"  # for suffix
+            img_name = self.get_image_file_name(obj_name)
             gloss_image = self.new_bake_image(obj_name)
             gloss_image.filepath = self.get_image_file_path(img_name)
             gloss_image.pixels = get_invert_image(img)
