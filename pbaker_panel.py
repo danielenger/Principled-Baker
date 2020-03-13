@@ -241,6 +241,7 @@ class PBAKER_PT_PrefixSuffixSettings(PBAKER_PT_SubPanel):
         col.label(text="Prefix Settings:")
         col.prop(self.settings, "image_prefix")
         col.prop(self.settings, "use_object_name")
+        col.prop(self.settings, "use_first_material_name")
 
         # Suffix
         col.label(text="Suffix Settings:")

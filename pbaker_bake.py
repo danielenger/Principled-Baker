@@ -411,6 +411,7 @@ class PBAKER_OT_bake(bpy.types.Operator):
         if prefix == "" or len(self.selected_objects) > 1 or self.settings.use_object_name:
             object_name = remove_not_allowed_signs(object_name)
             prefix = self.settings.image_prefix + object_name
+
         image_file_format = IMAGE_FILE_FORMAT_ENDINGS[self.settings.file_format]
         image_file_name = "{0}{1}.{2}".format(
             prefix, self.get_suffix(), image_file_format)
@@ -445,17 +446,15 @@ class PBAKER_OT_bake(bpy.types.Operator):
         return image
 
     def get_new_image_prefix(self, object_name):
+        prefix = self.settings.image_prefix
         object_name = remove_not_allowed_signs(object_name)
-        if self.settings.bake_mode == 'BATCH':
-            prefix = self.settings.image_prefix + object_name
-        else:
-            if self.settings.use_object_name:
-                prefix = self.settings.image_prefix + object_name
-            else:
-                if self.settings.image_prefix:
-                    prefix = self.settings.image_prefix
-                else:
-                    prefix = object_name
+        if (self.settings.bake_mode == 'BATCH') or (not self.settings.image_prefix and not self.settings.use_object_name and not self.settings.use_first_material_name):
+            prefix += object_name
+        if self.settings.use_object_name:
+            prefix += object_name
+        if self.settings.use_first_material_name:
+            if has_material(bpy.data.objects[object_name]):
+                prefix += bpy.data.objects[object_name].material_slots[0].material.name
         return prefix
 
     def new_image(self, object_name, suffix, prefix=None, alpha=False):
@@ -527,8 +526,8 @@ class PBAKER_OT_bake(bpy.types.Operator):
     def create_gloss_image(self, obj_name):
         if "Roughness" in self.new_images:
             img = self.new_images["Roughness"]
-            self.job_name = "Glossiness"  # for suffix
             img_name = self.get_image_file_name(obj_name)
+            self.job_name = "Glossiness"  # for suffix
             gloss_image = self.new_bake_image(obj_name)
             gloss_image.filepath = self.get_image_file_path(img_name)
             gloss_image.pixels = get_invert_image(img)
@@ -1167,7 +1166,8 @@ class PBAKER_OT_bake(bpy.types.Operator):
     # -------------------------------------------------------------------------
     # INVOKE
     # -------------------------------------------------------------------------
-    def invoke(self, context, event):
+    def execute(self, context):
+
 
         if not context.selected_objects:
             self.report({'INFO'}, "Nothing selected.")

@@ -18,8 +18,8 @@ bl_info = {
     "name": "Principled Baker",
     "description": "bakes all inputs of Principled BSDF to image textures",
     "author": "Daniel Engler",
-    "version": (0, 5, 4),
-    "blender": (2, 80, 0),
+    "version": (0, 5, 5),
+    "blender": (2, 82, 0),
     "location": "Shader Editor Toolbar",
     "category": "Node",
 }

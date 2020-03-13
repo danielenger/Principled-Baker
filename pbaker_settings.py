@@ -310,6 +310,12 @@ class PBAKER_settings(PropertyGroup):
         default=False
     )
 
+    use_first_material_name: BoolProperty(
+        name="First Material Name as (second or third) Prefix",
+        description="Use first material name as prefix.",
+        default=False
+    )
+
     file_path: StringProperty(
         name="",
         description="directory for textures output",
