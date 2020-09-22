@@ -4,9 +4,8 @@ import time
 import bpy
 import numpy
 
-is_2_79 = True if bpy.app.version_string.startswith('2.7') else False
-is_2_80 = True if bpy.app.version_string.startswith('2.8') else False
-
+is_2_79 = True if bpy.app.version < ( 2, 80, 0) else False
+is_2_80 = True if bpy.app.version >= ( 2, 80, 0) else False
 
 NODE_TAG = 'p_baker_node'
 MATERIAL_TAG = 'p_baker_material'
