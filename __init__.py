@@ -34,7 +34,7 @@ from .pbaker_prefs import PBAKER_prefs
 from .pbaker_preset import *
 from .pbaker_settings import PBAKER_settings
 
-if bpy.app.version_string.startswith('2.8'):
+if bpy.app.version >= ( 2, 80, 0):
     from .pbaker_panel import *
 
     classes = (
