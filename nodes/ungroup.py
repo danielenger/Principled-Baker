@@ -1,5 +1,5 @@
-from principled_baker.nodes.duplicate import duplicate_node
-from principled_baker.nodes.socket_index import *
+from ..nodes.duplicate import duplicate_node
+from ..nodes.socket_index import *
 
 
 def ungroup_nodes(mat, group_nodes, do_ungroup_values=True):

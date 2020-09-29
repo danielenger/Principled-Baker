@@ -1,6 +1,6 @@
 import numpy as np
 
-from principled_baker.image.prefix import get_image_prefix
+from ..image.prefix import get_image_prefix
 
 
 def get_combined_images(img1, img2, from_channel, to_channel) -> np.ndarray:

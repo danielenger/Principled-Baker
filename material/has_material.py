@@ -1,5 +1,5 @@
-from principled_baker.const import MATERIAL_TAG
-from principled_baker.nodes.outputs import get_active_output
+from ..const import MATERIAL_TAG
+from ..nodes.outputs import get_active_output
 
 
 def has_material(obj):

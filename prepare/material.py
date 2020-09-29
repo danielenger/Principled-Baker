@@ -1,13 +1,13 @@
 import bpy
 
-from principled_baker.const import ALPHA_NODES, NODE_TAG, NORMAL_INPUTS
-from principled_baker.nodes.duplicate import duplicate_nodes
-from principled_baker.nodes.new import new_mixrgb_node, new_rgb_node
-from principled_baker.nodes.node import (get_all_nodes_linked_from,
+from ..const import ALPHA_NODES, NODE_TAG, NORMAL_INPUTS
+from ..nodes.duplicate import duplicate_nodes
+from ..nodes.new import new_mixrgb_node, new_rgb_node
+from ..nodes.node import (get_all_nodes_linked_from,
                                          is_mixnode_in_node_tree,
                                          is_node_type_in_node_tree)
-from principled_baker.nodes.outputs import get_active_output
-from principled_baker.nodes.ungroup import ungroup_nodes
+from ..nodes.outputs import get_active_output
+from ..nodes.ungroup import ungroup_nodes
 
 
 def prepare_bake_factor(mat, socket, new_socket, node_type, factor_name='Fac'):

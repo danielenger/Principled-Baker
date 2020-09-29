@@ -1,6 +1,6 @@
 import bpy
 
-from principled_baker.const import MATERIAL_TAG
+from ..const import MATERIAL_TAG
 
 
 def deactivate_material_outputs(material):

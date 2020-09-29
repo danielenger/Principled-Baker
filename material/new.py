@@ -1,6 +1,6 @@
 import bpy
 
-from principled_baker.const import MATERIAL_TAG
+from ..const import MATERIAL_TAG
 
 
 def new_material(name, principled_node_values=None):

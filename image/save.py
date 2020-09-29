@@ -1,6 +1,6 @@
 import bpy
 
-from principled_baker.image.save_as import save_image_as
+from ..image.save_as import save_image_as
 
 
 def save_image(image, jobname):

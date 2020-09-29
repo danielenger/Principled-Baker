@@ -1,7 +1,7 @@
 import bpy
 
-from principled_baker.functions import remove_not_allowed_signs
-from principled_baker.material.has_material import has_material
+from ..functions import remove_not_allowed_signs
+from ..material.has_material import has_material
 
 
 def get_image_prefix(object_name):

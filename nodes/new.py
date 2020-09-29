@@ -1,4 +1,4 @@
-from principled_baker.const import NODE_TAG
+from ..const import NODE_TAG
 
 
 def new_pb_emission_node(material, color=[0, 0, 0, 1]):

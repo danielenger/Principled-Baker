@@ -1,4 +1,4 @@
-from principled_baker.const import NODE_TAG
+from ..const import NODE_TAG
 
 
 def delete_tagged_nodes(material):

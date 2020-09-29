@@ -1,7 +1,7 @@
 import bpy
 
-from principled_baker.const import MATERIAL_TAG_VERTEX
-from principled_baker.nodes.find import find_node_by_type
+from ..const import MATERIAL_TAG_VERTEX
+from ..nodes.find import find_node_by_type
 
 
 def add_temp_material(obj):

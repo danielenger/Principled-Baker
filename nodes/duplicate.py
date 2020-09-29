@@ -1,4 +1,4 @@
-from principled_baker.nodes.socket_index import *
+from ..nodes.socket_index import *
 
 
 def duplicate_node(mat, node):

@@ -1,9 +1,9 @@
 import bpy
 
-from principled_baker.const import MATERIAL_TAG, NODE_INPUTS
-from principled_baker.functions import is_list_equal
-from principled_baker.nodes.outputs import get_active_output
-from principled_baker.nodes.value_list import get_value_from_node_by_name
+from ..const import MATERIAL_TAG, NODE_INPUTS
+from ..functions import is_list_equal
+from ..nodes.outputs import get_active_output
+from ..nodes.value_list import get_value_from_node_by_name
 
 
 def get_value_list(node, value_name, node_type):

@@ -1,8 +1,8 @@
 import bpy
 
-from principled_baker.const import MATERIAL_TAG, MATERIAL_TAG_VERTEX
-from principled_baker.nodes.find import find_node_by_type
-from principled_baker.nodes.outputs import get_active_output
+from ..const import MATERIAL_TAG, MATERIAL_TAG_VERTEX
+from ..nodes.find import find_node_by_type
+from ..nodes.outputs import get_active_output
 
 
 def delete_tagged_materials(obj, tag):

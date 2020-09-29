@@ -2,13 +2,13 @@ from pathlib import Path
 
 import bpy
 
-from principled_baker.const import ALPHA_NODES, NODE_TAG, PB_PACKAGE
-from principled_baker.functions import get_bake_type_by
-from principled_baker.nodes.new import new_pb_emission_node, new_pb_output_node
-from principled_baker.nodes.node import is_node_type_in_node_tree
-from principled_baker.nodes.outputs import (deactivate_material_outputs,
+from ..const import ALPHA_NODES, NODE_TAG, PB_PACKAGE
+from ..functions import get_bake_type_by
+from ..nodes.new import new_pb_emission_node, new_pb_output_node
+from ..nodes.node import is_node_type_in_node_tree
+from ..nodes.outputs import (deactivate_material_outputs,
                                             get_active_output)
-from principled_baker.prepare.material import (prepare_bake,
+from ..prepare.material import (prepare_bake,
                                                prepare_bake_factor,
                                                prepare_material_for_bake)
 

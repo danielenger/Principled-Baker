@@ -1,10 +1,10 @@
 import bpy
 
-from principled_baker.const import (ALPHA_NODES, NODE_INPUTS_SORTED,
+from ..const import (ALPHA_NODES, NODE_INPUTS_SORTED,
                                     NORMAL_INPUTS)
-from principled_baker.nodes.find import find_node_by_type
-from principled_baker.nodes.new import new_image_node, new_mixrgb_node
-from principled_baker.nodes.node import get_sibling_node
+from ..nodes.find import find_node_by_type
+from ..nodes.new import new_image_node, new_mixrgb_node
+from ..nodes.node import get_sibling_node
 
 
 def add_images_to_material(new_images, new_mat):
