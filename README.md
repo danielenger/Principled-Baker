@@ -12,8 +12,8 @@ Features:
 - bake almost all Principled BSDF (and more) inputs (Color, Metallic, Roughness, etc.) to image textures
 - Autodetection/Manual selection also for Alpha, Emission, Ambient Occlusion (from node; 2.80 only), Diffuse, Glossiness (invert Roughness), Bump (as hightmap), Vertex Color, Material ID
 - 3 Bake Modes:
-  - Combined (new default): Bake a single selected object or bake multiple selected objects with shared UV maps. This is like Blenders default bake.
-  - Single/Batch (previous default): Bake every selected object separately.
+  - Combined: Bake a single selected object or bake multiple selected objects with shared UV maps. This is like Blenders default bake.
+  - Single/Batch: Bake every selected object separately.
   - Selected to Active: Does what it says.
 - Create new material with new image texture nodes (most image nodes connected)
 - Auto Smooth from object/on/off
@@ -39,13 +39,9 @@ If a Normal Map and a Bump Map is baked, the Bump node will not be linked in new
 
 - Some results from complex mixed shader node trees might not be useful
 
-- no bake from Ambient Occlusion Shader in 2.79
-
-- Auto UV unwrap not available in Blender 2.79 for multiple objects (bake mode: Combined)
-
 - with Material Name to define the Material ID Colors: Duplicate colors are possible!
 
-- Baking "in" Eevee might crash Blender 2.80!
+- Baking "in" Eevee might crash Blender!
 
 - known issues:
   * results for Subsurface Radius is not useful 

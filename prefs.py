@@ -1,11 +1,7 @@
 import bpy
+from bpy.props import BoolProperty, EnumProperty, FloatProperty, StringProperty
 
 from addon_utils import check
-from bpy.props import (StringProperty,
-                       BoolProperty,
-                       FloatProperty,
-                       EnumProperty
-                       )
 
 
 # Addon prefs
@@ -49,11 +45,9 @@ class PBAKER_prefs(bpy.types.AddonPreferences):
         layout = self.layout
         col = layout.column()
 
-        # 2.80
-        if bpy.app.version_string.startswith('2.8'):
-            col.prop(self, "switch_to_cycles")
-            col.label(text="This may crash Blender!", icon='ERROR')
-            col.separator()
+        col.prop(self, "switch_to_cycles")
+        col.label(text="This may crash Blender!", icon='ERROR')
+        col.separator()
 
         col.prop(self, "mat_id_algorithm")
         if self.mat_id_algorithm == 'HUE':

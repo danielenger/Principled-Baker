@@ -123,8 +123,25 @@ class PBAKER_settings(PropertyGroup):
 
     use_autodetect: BoolProperty(
         name="Autodetect",
-        description="Bake only linked inputs and inputs with values that differ in different Shader nodes",
+        description="Bake linked inputs and/or inputs with values that differ in different Shader nodes.\n\nThis depends on the selected Detection Options",
         default=True
+    )
+
+    image_prefix: StringProperty(
+        name="Prefix",
+        maxlen=1024,
+    )
+
+    use_object_name: BoolProperty(
+        name="Object Name",
+        description="Use Object Name as part of Texture Name to get unique names",
+        default=True
+    )
+
+    use_first_material_name: BoolProperty(
+        name="First Material Name as (second) Prefix",
+        description="Use first material name as prefix.",
+        default=False
     )
 
     image_suffix_settings_show: BoolProperty(
@@ -207,7 +224,7 @@ class PBAKER_settings(PropertyGroup):
     )
     use_invert_roughness: BoolProperty(
         name="Glossiness",
-        description="Glossiness from inverted Roughness",
+        description="Glossiness from inverted Roughness.\n\nBakes Roughness texture and inverts the image.",
         default=False
     )
 
@@ -298,35 +315,18 @@ class PBAKER_settings(PropertyGroup):
         items=color_depth_items
     )
 
-    image_prefix: StringProperty(
-        name="Prefix (Texture Name)",
-        description="Object name will be used as prefix, if Prefix not set",
-        maxlen=1024,
-    )
-
-    use_object_name: BoolProperty(
-        name="Object Name as (second) Prefix",
-        description="Use object name as prefix.\nObject name will be used as prefix, if Texture Name Prefix not set",
-        default=False
-    )
-
-    use_first_material_name: BoolProperty(
-        name="First Material Name as (second or third) Prefix",
-        description="Use first material name as prefix.",
-        default=False
-    )
-
     file_path: StringProperty(
         name="",
         description="directory for textures output",
         default="//",
-        maxlen=1024,
+        # maxlen=1024,
         subtype='DIR_PATH'
     )
 
     use_texture_folder: BoolProperty(
         name="Texture Folder",
-        description="Create a texture directory per object named by (active) object",
+        description="""Create a texture directory per object named by objects.
+        \nCombined or Selected to Active: Folder named by active object.\nSingle/Batch: Folder(s) named by object(s)""",
         default=False
     )
 
@@ -343,7 +343,7 @@ class PBAKER_settings(PropertyGroup):
     bake_mode: EnumProperty(
         name="Bake Mode",
         items=(
-            ('COMBINED', 'Combined', 'Bake a single selected object or bake multiple objects with shared UV maps.\n(like Blenders default bake)'),
+            ('COMBINED', 'Combined', 'Bake a single selected object or bake multiple objects with shared UV maps.\n\nThis is like Blenders default bake'),
             ('BATCH', 'Single/Batch', 'Bake every selected object separately.'),
             ('SELECTED_TO_ACTIVE', 'Selected to Active', ''),
         ),
@@ -472,8 +472,7 @@ class PBAKER_settings(PropertyGroup):
             ('CUSTOM', 'Custom', ''),
             ('lower', 'Lower', 'Convert suffix to lowercase letters.'),
             ('upper', 'Upper', 'Convert suffix to capital letters.'),
-            ('title', 'Title',
-             'Convert suffix. First letter capital. Rest lowercase letters.'),
+            ('title', 'Title', 'Capitalize every word.'),
         ),
         default='CUSTOM'
     )
@@ -542,11 +541,6 @@ class PBAKER_settings(PropertyGroup):
         description='',
         default=False)
 
-    set_active_render_uv_map: BoolProperty(
-        name="Set as active render",
-        description='',
-        default=False)
-
     select_set_active_render_uv_map: BoolProperty(
         name="Set as active render",
         description='',
@@ -585,6 +579,11 @@ class PBAKER_settings(PropertyGroup):
         description='',
         default=False)
 
+    copy_modifiers: BoolProperty(
+        name="Copy Modifiers",
+        description='',
+        default=True)
+
     duplicate_objects_prefix: StringProperty(
         name="Prefix",
         default="",
@@ -603,12 +602,12 @@ class PBAKER_settings(PropertyGroup):
 
     use_value_differ: BoolProperty(
         name="Value Differences",
-        description='',
+        description='Detect value differences in shader nodes.\n\nThis setting is for Autodetect and for manual detection in the Bake List',
         default=True
     )
 
     use_connected_inputs: BoolProperty(
         name="Connected Inputs",
-        description='',
+        description='Detect connected inputs in shader nodes.\n\nThis setting is for Autodetect and for manual detection in the Bake List',
         default=True
     )

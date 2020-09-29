@@ -2,7 +2,7 @@ import bpy
 from bpy.props import BoolProperty, EnumProperty, IntProperty
 from bpy.types import Operator, PropertyGroup, UIList
 
-from .pbaker_functions import *
+from .joblist import get_joblist_by_autodetection_from_objects
 
 DEFAULT_SAMPLES = 128
 
@@ -130,14 +130,14 @@ class PBAKER_BAKELIST_OT_Init(Operator):
         bake_list = context.scene.principled_baker_bakelist
 
         if not len(bake_list):
-            for job_name in JOBLIST:
+            for jobname in JOBLIST:
                 if bpy.context.scene.principled_baker_settings.use_shortlist:
-                    if job_name in JOBLIST_SHORT:
+                    if jobname in JOBLIST_SHORT:
                         item = bake_list.add()
-                        item.name = job_name
+                        item.name = jobname
                 else:
                     item = bake_list.add()
-                    item.name = job_name
+                    item.name = jobname
                     item.samples = DEFAULT_SAMPLES
 
         return{'FINISHED'}
@@ -157,8 +157,6 @@ class PBAKER_BAKELIST_OT_Delete(Operator):
 
 
 class PBAKER_BAKELIST_OT_Update(Operator):
-    """Update Bake List"""
-
     bl_idname = "principled_baker_bakelist.update"
     bl_label = "Update Bakelist"
 
@@ -185,20 +183,19 @@ class PBAKER_BAKELIST_OT_Detect(Operator):
     bl_label = "Update Bakelist"
 
     def execute(self, context):
-
         settings = bpy.context.scene.principled_baker_settings
+
+        if not settings.use_value_differ and not settings.use_connected_inputs:
+            self.report({'INFO'}, "Select at least one Detection Option!")
+            return {'CANCELLED'}
 
         if not context.scene.principled_baker_bakelist:
             bpy.ops.principled_baker_bakelist.init()
-        # else:
-        #     bpy.ops.principled_baker_bakelist.reset()
 
         bakelist = context.scene.principled_baker_bakelist
 
-        # temp_joblist = get_joblist_from_objects(context.selected_objects)
-        temp_joblist = get_joblist_from_objects(context.selected_objects,
-                                                by_value_differ=settings.use_value_differ,
-                                                by_connected_inputs=settings.use_connected_inputs)
+        temp_joblist = get_joblist_by_autodetection_from_objects(
+            context.selected_objects)
 
         for item_name, item in bakelist.items():
             if item_name in temp_joblist:
@@ -206,12 +203,10 @@ class PBAKER_BAKELIST_OT_Detect(Operator):
             else:
                 item.do_bake = False
 
-        return{'FINISHED'}
+        return {'FINISHED'}
 
 
 class PBAKER_BAKELIST_OT_Reset(Operator):
-    """Reset list"""
-
     bl_idname = "principled_baker_bakelist.reset"
     bl_label = "Update Bakelist"
 
@@ -224,15 +219,13 @@ class PBAKER_BAKELIST_OT_Reset(Operator):
 
 
 class PBAKER_BAKELIST_OT_Disable_All(Operator):
-    """Disable all"""
-
     bl_idname = "principled_baker_bakelist.disable_all"
     bl_label = "Disable All"
 
     def execute(self, context):
         bakelist = context.scene.principled_baker_bakelist
 
-        for item_name, item in bakelist.items():
+        for _, item in bakelist.items():
             item.do_bake = False
 
         return{'FINISHED'}

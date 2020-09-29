@@ -1,6 +1,6 @@
-# import bpy
-from bl_operators.presets import AddPresetBase
 from bpy.types import Menu, Operator
+
+from bl_operators.presets import AddPresetBase
 
 PRESET_BAKELIST_SUBDIR = "principled_baker/bake_list"
 PRESET_SUFFIXLIST_SUBDIR = "principled_baker/suffix_list"
