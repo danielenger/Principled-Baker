@@ -87,7 +87,12 @@ class PBAKER_OT_bake(bpy.types.Operator):
     def get_image_file_path(self, image_file_name):
         img_file_name = remove_not_allowed_signs(image_file_name)
         tex_dir = Path(self.texture_folder)
-        path = Path(bpy.path.abspath(self.settings.file_path)) / tex_dir / img_file_name
+        if self.settings.file_path.startswith("//"):
+            path = Path(
+                bpy.path.relpath(self.settings.file_path)) / tex_dir / img_file_name
+        else:
+            path = Path(
+                bpy.path.abspath(self.settings.file_path)) / tex_dir / img_file_name
         return str(path)
 
     def new_bake_image(self, object_name):
