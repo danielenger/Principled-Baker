@@ -60,7 +60,7 @@ class PBAKER_OT_bake(bpy.types.Operator):
 
         img_file_name = self.get_image_file_name(obj.name)
         tex_dir = Path(self.texture_folder)
-        path = Path(self.settings.file_path) / tex_dir / img_file_name
+        path = Path(bpy.path.abspath(self.settings.file_path)) / tex_dir / img_file_name
         if path.is_file():
             self.report({'INFO'}, "baking skipped for '{0}'. File exists.".format(
                 self.get_image_file_name(obj.name)))
@@ -87,7 +87,7 @@ class PBAKER_OT_bake(bpy.types.Operator):
     def get_image_file_path(self, image_file_name):
         img_file_name = remove_not_allowed_signs(image_file_name)
         tex_dir = Path(self.texture_folder)
-        path = Path(self.settings.file_path) / tex_dir / img_file_name
+        path = Path(bpy.path.abspath(self.settings.file_path)) / tex_dir / img_file_name
         return str(path)
 
     def new_bake_image(self, object_name):
@@ -138,7 +138,7 @@ class PBAKER_OT_bake(bpy.types.Operator):
     def check_texture_folder(self, new_mat_name):
         if self.settings.use_texture_folder:
             self.texture_folder = remove_not_allowed_signs(new_mat_name)
-            path = str(Path(self.settings.file_path) / self.texture_folder)
+            path = str(Path(bpy.path.abspath(self.settings.file_path)) / self.texture_folder)
             if check_path_access(path):
                 return True
             else:
