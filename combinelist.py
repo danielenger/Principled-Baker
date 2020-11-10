@@ -68,6 +68,11 @@ class PBAKER_CombineListItem(PropertyGroup):
     channel_a_from_channel: EnumProperty(
         name="channel", items=from_channel_items, description="from channel")
 
+    channel_r_invert: BoolProperty(name="R invert", description="Red invert")
+    channel_g_invert: BoolProperty(name="G invert", description="Green invert")
+    channel_b_invert: BoolProperty(name="B invert", description="Blue invert")
+    channel_a_invert: BoolProperty(name="A invert", description="Alpha invert")
+
 
 class PBAKER_UL_CombineList(UIList):
     def draw_item(self, context, layout, data, item, icon, active_data,
@@ -85,15 +90,19 @@ class PBAKER_UL_CombineList(UIList):
             row = col2.row()
             row.prop(item, "channel_r")
             row.prop(item, "channel_r_from_channel", text='')
+            row.prop(item, "channel_r_invert", text='invert')
             row = col2.row()
             row.prop(item, "channel_g")
             row.prop(item, "channel_g_from_channel", text='')
+            row.prop(item, "channel_g_invert", text='invert')
             row = col2.row()
             row.prop(item, "channel_b")
             row.prop(item, "channel_b_from_channel", text='')
+            row.prop(item, "channel_b_invert", text='invert')
             row = col2.row()
             row.prop(item, "channel_a")
             row.prop(item, "channel_a_from_channel", text='')
+            row.prop(item, "channel_a_invert", text='invert')
             row = col2.row()
 
 

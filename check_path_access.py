@@ -6,13 +6,9 @@ import bpy
 
 def check_path_access(path):
     if path.startswith("//"):
-        abs_path = Path(bpy.data.filepath).parent / path.replace("//", "")
+        abs_path = Path(bpy.path.abspath(path))
     else:
         abs_path = Path(path)
-
-    # TODO fix windows write permission
-    if os.sys.platform == 'win32':
-        return True
 
     write_permission = False
     try:

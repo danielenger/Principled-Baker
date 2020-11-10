@@ -60,7 +60,9 @@ class PBAKER_OT_bake(bpy.types.Operator):
 
         img_file_name = self.get_image_file_name(obj.name)
         tex_dir = Path(self.texture_folder)
-        path = Path(self.settings.file_path) / tex_dir / img_file_name
+        path = Path(bpy.path.abspath(self.settings.file_path)) / \
+            tex_dir / img_file_name
+
         if path.is_file():
             self.report({'INFO'}, "baking skipped for '{0}'. File exists.".format(
                 self.get_image_file_name(obj.name)))
@@ -87,7 +89,12 @@ class PBAKER_OT_bake(bpy.types.Operator):
     def get_image_file_path(self, image_file_name):
         img_file_name = remove_not_allowed_signs(image_file_name)
         tex_dir = Path(self.texture_folder)
-        path = Path(self.settings.file_path) / tex_dir / img_file_name
+        if self.settings.file_path.startswith("//"):
+            rel_path = bpy.path.relpath(self.settings.file_path)
+            path = rel_path + str(tex_dir / img_file_name)
+        else:
+            abs_path = bpy.path.abspath(self.settings.file_path)
+            path = Path(abs_path) / tex_dir / img_file_name
         return str(path)
 
     def new_bake_image(self, object_name):
@@ -135,21 +142,12 @@ class PBAKER_OT_bake(bpy.types.Operator):
             gloss_image.reload()
             self.new_images[self.jobname] = gloss_image
 
-    def check_texture_folder(self, new_mat_name):
-        if self.settings.use_texture_folder:
-            self.texture_folder = remove_not_allowed_signs(new_mat_name)
-            path = str(Path(self.settings.file_path) / self.texture_folder)
-            if check_path_access(path):
-                return True
-            else:
-                return False
-        else:
-            return True
+    def check_texture_folder(self):
+        abs_path = Path(bpy.path.abspath(self.settings.file_path))
+        path = str(abs_path / self.texture_folder)
+        return check_path_access(path)
 
     def check_file_path(self):
-        for s in {':', '*', '?', '"', '<', '>', '|'}:
-            self.settings.file_path = self.settings.file_path.replace(s, "")
-
         path = self.settings.file_path
 
         if path in {'', ' ', '/', '///', '\\', '//\\'}:
@@ -233,6 +231,10 @@ class PBAKER_OT_bake(bpy.types.Operator):
                 channel_g=int(combi.channel_g_from_channel),
                 channel_b=int(combi.channel_b_from_channel),
                 channel_a=int(combi.channel_a_from_channel),
+                invert_r=combi.channel_r_invert,
+                invert_g=combi.channel_g_invert,
+                invert_b=combi.channel_b_invert,
+                invert_a=combi.channel_a_invert,
             )
 
             # Color Depth
@@ -284,7 +286,7 @@ class PBAKER_OT_bake(bpy.types.Operator):
 
     def bake_and_save(self, image, bake_type='EMIT'):
         """Bake and save image."""
-        
+
         image.save()
         self.report({'INFO'}, "baking '{0}'".format(image.name))
         self.bake(bake_type)
@@ -518,7 +520,14 @@ class PBAKER_OT_bake(bpy.types.Operator):
             new_mat = new_material(new_mat_name, self.new_pri_node_values)
 
         # texture folder
-        if not self.check_texture_folder(new_mat_name):
+        if self.settings.use_texture_folder:
+            if self.settings.bake_mode == "BATCH":
+                tex_dir = bake_objects[0].name
+            else:
+                tex_dir = active_object.name
+            self.texture_folder = remove_not_allowed_signs(tex_dir)
+
+        if not self.check_texture_folder():
             self.report({'ERROR'}, 'Error: Texture Folder')
             return {'CANCELLED'}
 
@@ -689,9 +698,9 @@ class PBAKER_OT_bake(bpy.types.Operator):
         active_object.data.materials.append(new_mat)
 
         # texture folder
-        if not self.check_texture_folder(new_mat_name):
-            self.report({'ERROR'}, 'Error: Texture Folder')
-            return {'CANCELLED'}
+        if self.settings.use_texture_folder:
+            tex_dir = active_object.name
+            self.texture_folder = remove_not_allowed_signs(tex_dir)
 
         # Go through joblist
         for self.jobname in self.joblist:
