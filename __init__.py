@@ -51,7 +51,7 @@ classes = (
     PBAKER_AddCombinePresetObjectDisplay,
     PBAKER_MT_display_combine_presets,
     PBAKER_PT_Main,
-    PBAKER_PT_SubPanel,
+    # PBAKER_PT_SubPanel,
     PBAKER_PT_BakeList,
     PBAKER_PT_AdditionalBakeTypes,
     PBAKER_PT_OutputSettings,
