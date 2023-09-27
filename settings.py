@@ -150,11 +150,19 @@ class PBAKER_settings(PropertyGroup):
     )
 
     custom_resolution: IntProperty(
-        name="Resolution",
-        default=1024,
+        name="Width",
+        default=1920,
         min=1,
         soft_max=8 * 1024
     )
+
+    custom_resolution2: IntProperty(
+        name="Height",
+        default=1080,
+        min=1,
+        soft_max=8 * 1024
+    )
+
     resolution: EnumProperty(
         name="Resolution",
         items=(
