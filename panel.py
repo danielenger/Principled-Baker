@@ -249,6 +249,7 @@ class PBAKER_PT_OutputSettings(PBAKER_PT_SubPanel):
         row.prop(self.settings, "resolution", expand=True)
         if self.settings.resolution == 'CUSTOM':
             col.prop(self.settings, "custom_resolution")
+            col.prop(self.settings, "custom_resolution2")
         col.separator()
         col.prop(self.settings, "file_path")
         col.prop(self.settings, "use_overwrite")

@@ -112,13 +112,15 @@ class PBAKER_OT_bake(bpy.types.Operator):
             color = (0.5, 0.5, 1.0, 1.0)
 
         # resolution
-        res = int(self.settings.custom_resolution) if self.settings.resolution == 'CUSTOM' else int(
+        res_width = int(self.settings.custom_resolution) if self.settings.resolution == 'CUSTOM' else int(
+            self.settings.resolution)
+        res_height = int(self.settings.custom_resolution2) if self.settings.resolution == 'CUSTOM' else int(
             self.settings.resolution)
 
         is_float = False if self.settings.color_depth == '8' else True
 
         image = bpy.data.images.new(
-            name=img_name, width=res, height=res, alpha=alpha, float_buffer=is_float)
+            name=img_name, width=res_width, height=res_height, alpha=alpha, float_buffer=is_float)
 
         if not self.jobname in {'Color', 'Diffuse'}:
             image.colorspace_settings.name = 'Non-Color'
